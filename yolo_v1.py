@@ -73,6 +73,7 @@ class Yolo_V1(nn.Module):
             bboxes = torch.cat((bboxes, max_idx.unsqueeze(1).float()),1)            
             bboxes = confidence_threshold(bboxes, 0.5) # confidence thresholding            
             #TODO: Continue; Non-maximum suppression for each class
+            # use https://d2l.ai/chapter_computer-vision/anchor.html
             results[batch] = bboxes
         
         return results
@@ -194,6 +195,4 @@ class Yolo_V1(nn.Module):
                 elif len(conv_block) == 2: #block with conv and leaky relu
                     conv_block[0], idx = self.load_conv_weights(weights, conv_block[0], idx)
                 else:
-                    continue                
-            # print(f"Num elements read: {idx}")
-            # print(f"Length of weights file: {len(weights)}")
+                    continue            
