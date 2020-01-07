@@ -5,6 +5,8 @@ You Only Look Once version 1
 - [ ] Data Processing
     - [x] Download the VOC dataset
     - [ ] Custom Dataset class
+        - [ ] Code to show bounding boxes given image and detections
+        - [ ] Code to resize an image and its detections to a given size
     - [ ] Data Transformations
         - [ ] Resize images to correct size
             - [ ] Need to modify the detection labels

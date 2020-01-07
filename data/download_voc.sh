@@ -9,3 +9,5 @@ tar xf VOCtrainval_06-Nov-2007.tar
 tar xf VOCtest_06-Nov-2007.tar
 
 python voc_label.py
+
+cat 2007_* 2012_train.txt > train.txt
