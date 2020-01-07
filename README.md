@@ -4,16 +4,17 @@ You Only Look Once version 1
 # To do
 - [ ] Data Processing
     - [x] Download the VOC dataset
-    - [ ] Custom Dataset class
-        - [ ] Code to show bounding boxes given image and detections
-        - [ ] Code to resize an image and its detections to a given size
+    - [x] Custom Dataset class
+        - [x] Code to show bounding boxes given image and detections
+        - [x] Code to resize an image and its detections to a given size
     - [ ] Data Transformations
-        - [ ] Resize images to correct size
-            - [ ] Need to modify the detection labels
+        - [x] Resize images to correct size
+            - [x] Need to modify the detection labels
         - [ ] Random scaling
         - [ ] Random translation
         - [ ] Random exposure and saturatation
 - [ ] Network Design
+    - [x] Add dropout after first fully connected
 - [ ] Training 
     - [ ] Loss function
 - [ ] Inference

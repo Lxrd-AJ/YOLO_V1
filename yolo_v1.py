@@ -28,6 +28,7 @@ class Yolo_V1(nn.Module):
         self.final_conv = nn.Conv2d(extract_out, 256, 3, 1, 1)
         self.linear_layers = nn.Sequential(
             nn.Linear(12*12*256,1715,True),
+            nn.Dropout(),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(1715, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
             nn.ReLU(inplace=True)
