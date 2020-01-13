@@ -10,6 +10,7 @@ You Only Look Once version 1
     - [ ] Data Transformations
         - [x] Resize images to correct size
             - [x] Need to modify the detection labels
+        - [ ] Convert from Pascal VOC center normalised coordinates to YOLO box encoding
         - [ ] Random scaling
         - [ ] Random translation
         - [ ] Random exposure and saturatation

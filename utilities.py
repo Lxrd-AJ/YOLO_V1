@@ -3,6 +3,7 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 """
+# TODO: bbox should be YOLO Bounding box coordinate which is then converted to center noormalised coords
 - bbox cls <x> <y> <width> <height> is in normalised center coordinates where 
     x,y is the center of the box relative to the width and height of the image (grid cell)
         where x is ((x_max + x_min)/2)/width
@@ -87,26 +88,26 @@ def iou(a,b):
     
         
 
-# def convert_center_coords_to_noorm(bboxes):
-#     (rows,cols) = (7,7)    
-#     stride = 64
-#     assert (rows * cols) == bboxes.size(0)
-#     #generate the strides for each grid position  
-#     grid_size = 7  
-#     grid = np.arange(grid_size)
-#     row,col = np.meshgrid(grid,grid)
-#     row = torch.FloatTensor(row).view(-1,1)
-#     col = torch.FloatTensor(col).view(-1,1)
-#     grid = torch.cat((row,col),1) * stride
-#     # center coordinates
-#     bboxes[:,1:3] = (bboxes[:,1:3] * stride).round()
-#     bboxes[:,1:3] = bboxes[:,1:3] + grid
-#     bboxes[:,3:] = (bboxes[:,3:].pow(2) * 448).round()
-#     # Convert x,y to top left coords and leave the width and height as they are
-#     bboxes[:,1] -= bboxes[:,3]/2
-#     bboxes[:,2] -= bboxes[:,4]/2
+def convert_center_coords_to_noorm(bboxes):
+    (rows,cols) = (7,7)    
+    stride = 64
+    assert (rows * cols) == bboxes.size(0)
+    #generate the strides for each grid position  
+    grid_size = 7  
+    grid = np.arange(grid_size)
+    row,col = np.meshgrid(grid,grid)
+    row = torch.FloatTensor(row).view(-1,1)
+    col = torch.FloatTensor(col).view(-1,1)
+    grid = torch.cat((row,col),1) * stride
+    # center coordinates
+    bboxes[:,1:3] = (bboxes[:,1:3] * stride).round()
+    bboxes[:,1:3] = bboxes[:,1:3] + grid
+    bboxes[:,3:] = (bboxes[:,3:].pow(2) * 448).round()
+    # Convert x,y to top left coords and leave the width and height as they are
+    bboxes[:,1] -= bboxes[:,3]/2
+    bboxes[:,2] -= bboxes[:,4]/2
     
-#     return bboxes
+    return bboxes
 
 
 def convert_cls_idx_name(name_mapping, arr):
