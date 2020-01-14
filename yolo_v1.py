@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 import ctypes
 import os
-from .utilities import *
+# from utilities import parse_config
 from PIL import Image
 from pprint import pprint
 from collections import OrderedDict

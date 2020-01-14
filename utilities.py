@@ -3,7 +3,6 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 """
-# TODO: bbox should be YOLO Bounding box coordinate which is then converted to center noormalised coords
 - bbox cls <x> <y> <width> <height> is in normalised center coordinates where 
     x,y is the center of the box relative to the width and height of the image (grid cell)
         where x is ((x_max + x_min)/2)/width
