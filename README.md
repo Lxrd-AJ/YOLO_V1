@@ -16,6 +16,7 @@ You Only Look Once version 1
     - [x] Add dropout after first fully connected
 - [ ] Training 
     - [ ] Loss function
+    - [ ] Support training and validation as in https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html#training-the-model
 - [ ] Modify the network to use a resnet101 (https://pytorch.org/docs/stable/torchvision/models.html#torchvision.models.resnet101) as the extraction layer in yolo_v1.py(L27) OR a SqueezeNet model (lesser resource intensive) https://pytorch.org/docs/stable/torchvision/models.html#torchvision.models.squeezenet1_1
     - [ ] Need to apply `self.final_conv` in my implementation to the output of `self.layer4` layer in PyTorch to support transfer learning OR `self.classifier` in SqueezeNet. Need to go from 512 output channels of layer4 to the 256 input channels final_conv requires
     - [x] Add the new Normalise transform to adjust the mean and std of the image

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import torch.utils as utils
 import torchvision.transforms as transforms
+import torch.optim as optim
 import numpy as np
 import ctypes
 import os
@@ -43,6 +44,7 @@ def convert_center_coords_to_YOLO(detections, grid_size=7):
 
 _GRID_SIZE_ = 7
 _DEVICE_ = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+_NUM_EPOCHS_ = 100
 
 transform = transforms.Compose([
     transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
@@ -50,7 +52,7 @@ transform = transforms.Compose([
     # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) #TODO: Add this when training
 ])
 train_dataset = VOCDataset("./data/2012_train.txt", grid_size=_GRID_SIZE_, transform=transform)
-dataloader = utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=4)
+dataloader = utils.data.DataLoader(train_dataset, batch_size=1, shuffle=True, num_workers=4)
 
 classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
@@ -60,6 +62,29 @@ if __name__ == "__main__":
     class_names = build_class_names("./voc.names")
 
     model = Yolo_V1(class_names, 7, blocks)
+    optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.1) #for transfer learning
+
+    model.to(_DEVICE_)
+
+    for epoch in range(_NUM_EPOCHS_):
+        print(f"Epoch {epoch}/{_NUM_EPOCHS_}")
+        running_loss = 0.0
+        
+        for idx, data in enumerate(dataloader,0):
+            images, detections = data
+            print(images.size())
+            print(detections.size())
+            print("\n"*2)
+            exit(0)
+
+            optimiser.zero_grad()
+            
+
+
+
+
+
 
 
 # How to use VOCDataset
