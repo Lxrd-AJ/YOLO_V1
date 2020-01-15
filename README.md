@@ -2,7 +2,7 @@
 You Only Look Once version 1
 
 # To do
-- [ ] Data Processing
+- [x] Data Processing
     - [x] Download the VOC dataset
     - [x] Custom Dataset class
         - [x] Code to show bounding boxes given image and detections

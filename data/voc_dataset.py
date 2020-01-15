@@ -39,6 +39,6 @@ class VOCDataset(data.Dataset):
             img = self.transform(img)
         
         detections = torch.Tensor(detections)#.unsqueeze(0)
-        print(img.size(), detections.size())
+        # print(img.size(), detections.size())
         return (img, detections)
 
