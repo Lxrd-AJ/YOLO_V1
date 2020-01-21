@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import numpy as np
 import ctypes
 import os
-# from utilities import parse_config
+from utilities import convert_center_coords_to_noorm, max_box, convert_cls_idx_name, confidence_threshold #parse_config
 from PIL import Image
 from pprint import pprint
 from collections import OrderedDict
@@ -49,6 +49,7 @@ class Yolo_V1(nn.Module):
         det_tensor = lin_out.view(-1,((self.num_bbox * 5) + self.num_classes),self.grid,self.grid)
         return det_tensor #torch.flatten(det_tensor)
 
+    # NB: This func should be deprecated
     def transform_predict(self, p_tensor):
         batch_size = p_tensor.size(0)
         stride = self.input_size[0] // p_tensor.size(2)
@@ -57,6 +58,7 @@ class Yolo_V1(nn.Module):
         predictions = p_tensor.view(batch_size, num_bbox, grid_size*grid_size)
         predictions = predictions.transpose(1,2).contiguous()
         num_bbox = 5 + self.num_classes
+        print(predictions.size())
         
         results = {}
         for batch in range(predictions.size(0)):
@@ -72,8 +74,8 @@ class Yolo_V1(nn.Module):
             pred_classes = convert_cls_idx_name(self.class_names, max_idx.numpy())
 
             bboxes = torch.cat((bboxes, max_idx.unsqueeze(1).float()),1)            
-            bboxes = confidence_threshold(bboxes, 0.5) # confidence thresholding            
-            #TODO: Continue; Non-maximum suppression for each class
+            bboxes = confidence_threshold(bboxes, 0.5) # confidence thresholding  (during predictions)          
+            #TODO: Continue; Non-maximum suppression for detections of a particular class
             # use https://d2l.ai/chapter_computer-vision/anchor.html
             results[batch] = bboxes
         

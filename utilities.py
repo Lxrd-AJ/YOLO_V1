@@ -2,6 +2,24 @@ import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
 
+
+"""
+converts the output of a YOLO model to a center coordinate where x,y is the center of the box and w,h represent the width
+and height of the image, this is not noormalised by the image width and height.
+- bbox is in the format [x y w h]
+
+NB: Calling this function on the ground truth bounding box encoded in the YOLO format would result in
+a bounding box containing the x,y coordinates of the grid cell with no width and height
+"""
+def convert_YOLO_to_center_coords(bbox, grid_x, grid_y, stride, grid_size=7):
+    img_size = stride * grid_size
+    gx = (stride * (grid_x)) + (stride * bbox[0])
+    gy = (stride * grid_y) + (stride * bbox[1])
+    w = (bbox[2] * bbox[2]) * img_size
+    h = (bbox[3] * bbox[3]) * img_size
+    return torch.Tensor([gx, gy, w, h])
+    
+
 """
 - bbox cls <x> <y> <width> <height> is in normalised center coordinates where 
     x,y is the center of the box relative to the width and height of the image (grid cell)
@@ -68,7 +86,33 @@ def confidence_threshold(A, conf_thresh):
     conf_mask = torch.nonzero(conf_mask[:,0]).squeeze()
     return A[conf_mask,:]    
 
-def iou(a,b):    
+
+
+"""
+Non-vectorised form of iou. It expects a, b to be in the center coordinates form where
+    - x,y is the center of the box
+    - w,h is the width and height of the box
+And a & b are in the form [x, y, w, h]
+"""
+def iou(a,b):
+    a_x_min, a_y_min = a[0] - a[2]/2.0, a[1] - a[3]/2.0
+    a_x_max, a_y_max = a[0] + a[2]/2.0, a[1] + a[3]/2.0
+    b_x_min, b_y_min = b[0] - b[2]/2.0, b[1] - b[3]/2.0
+    b_x_max, b_y_max = b[0] + b[2]/2.0, b[1] + b[3]/2.0
+    a_area, b_area = a[2] * a[3], b[2] * b[3]
+    
+    inter_width = max(0,min(a_x_max, b_x_max) - max(a_x_min, b_x_min))
+    inter_height = max(0, min(a_y_max, b_y_max) - max(a_y_min, b_y_min))
+    inter_area = inter_width * inter_height
+    union_area = (a_area + b_area) - inter_area
+
+    return inter_area / union_area
+
+
+"""
+Vectorised form of the intersection over union aka Jacquard index
+"""
+def _iou(a,b):    
     a_x_min, a_y_min = a[:,1], a[:,2]
     a_x_max, a_y_max = (a[:,3] + a_x_min), (a[:,4] + a_y_min)
     b_x_min, b_y_min = b[:,1], b[:,2]
