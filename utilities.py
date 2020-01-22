@@ -1,6 +1,39 @@
 import numpy as np 
 import torch
+import math
 from PIL import Image, ImageDraw, ImageFont
+
+
+"""
+Convert from center normalised coordinates to YOLO bounding box encoding
+
+There are two methods of approaching it
+- One method requires converting from the center noormalised coordinates back into the global image coords
+    it also requires knowledge of the image width/height to calculate the stride and to convert to the global coords
+    (229 - (64*3))/64 ; 229 is the center_x; 64 is the stride, 3 is the grid cell
+
+- Another method utilises the current center normalised coordinates.
+    For example, assuming a grid size of 7
+    encode the normalised center x in terms of the grid cells by using floor(7 * center_x) => g_x
+    the offset from the grid cell is then given by (7 * center_x) - g_x
+"""
+def convert_center_coords_to_YOLO(detections, grid_size=7):
+    res = []    
+    for idx, detection in enumerate(detections):        
+        bbox = detection[1:]
+        gx = math.floor(grid_size * bbox[0]) # grid x location of the cell
+        gy = math.floor(grid_size * bbox[1]) # grid y location of the cell
+        # Convert from Pascal VOC center normalised coordinates to YOLO box encoding
+        bbox[0] = (grid_size * bbox[0]) - gx
+        bbox[1] = (grid_size * bbox[1]) - gy
+        bbox[2] = math.sqrt(bbox[2])
+        bbox[3] = math.sqrt(bbox[3])
+        
+        # Adding the grid cell locations gx, gy to the detection to make loss calculations easier
+        grid_cells = torch.Tensor([gx,gy])
+        detection[1:] = bbox
+        res.append(torch.cat([detection, grid_cells]).unsqueeze(0))    
+    return torch.cat(res, dim=0) #detections
 
 
 """
@@ -19,6 +52,21 @@ def convert_YOLO_to_center_coords(bbox, grid_x, grid_y, stride, grid_size=7):
     h = (bbox[3] * bbox[3]) * img_size
     return torch.Tensor([gx, gy, w, h])
     
+
+
+"""
+uses the detections in the YOLO format to construct the a tensor in the grid coordinates e.g 7x7x30 to make it easier for loss calculations.
+Used only on the ground truth detection matrices
+"""
+def gnd_truth_tensor(detections, grid_size=7, num_classes=20):    
+    x = torch.zeros([grid_size, grid_size, num_classes+5], dtype=torch.float32)
+    for i in range(detections.size(0)):
+        grid_x, grid_y = int(detections[i,5]), int(detections[i,6])
+        cls_idx = int(detections[i,0])
+        bbox = detections[i,1:5]
+        x[grid_x,grid_y,1:5] = bbox
+        x[grid_x, grid_y, cls_idx] = 1        
+    return x
 
 """
 - bbox cls <x> <y> <width> <height> is in normalised center coordinates where 
