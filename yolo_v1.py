@@ -9,8 +9,9 @@ import torch.nn.functional as F
 import numpy as np
 import ctypes
 import os
-from utilities import convert_center_coords_to_noorm, max_box, convert_cls_idx_name, confidence_threshold #parse_config
+from torchvision import models
 from PIL import Image
+from utilities import convert_center_coords_to_noorm, max_box, convert_cls_idx_name, confidence_threshold #parse_config
 from pprint import pprint
 from collections import OrderedDict
 
@@ -25,6 +26,9 @@ class Yolo_V1(nn.Module):
         self.grid = grid_size        
         self.blocks = blocks
         self.extraction_layers, extract_out = self.parse_conv(blocks)
+        resnet50 = models.resnet50(pretrained=True)
+        print(resnet50)
+
         self.final_conv = nn.Conv2d(extract_out, 256, 3, 1, 1)
         self.linear_layers = nn.Sequential(
             nn.Linear(12*12*256,1715,True),

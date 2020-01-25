@@ -73,6 +73,7 @@ def gnd_truth_tensor(detections, grid_size=7, num_classes=20):
     x,y is the center of the box relative to the width and height of the image (grid cell)
         where x is ((x_max + x_min)/2)/width
     width and height is normalised relative to the width and height of `image`
+- image: should be a PIL image
 """
 def show_detection(image, bbox, name, colour="white"):
     width, height = image.size

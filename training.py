@@ -5,6 +5,7 @@ import torch.utils as utils
 import torchvision.transforms as transforms
 import torch.optim as optim
 import numpy as np
+import time
 import ctypes
 import os
 import random
@@ -15,6 +16,27 @@ from data.voc_dataset import VOCDataset
 from utilities import show_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor
 from yolo_v1 import Yolo_V1
 
+
+
+def evaluate(model, dataloader):
+    model.eval()
+    eval_loss = 0.0
+    with torch.no_grad():
+        for idx, data in enumerate(dataloader, 0):
+            X, Y = data #transform(data[0]), data[1]
+            res = model(X)
+            batch_loss = 0.0
+            for batch_idx in range(Y.size(0)):
+                pred_detections = res[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
+                target_detections = convert_center_coords_to_YOLO(Y[batch_idx], _GRID_SIZE_)
+                target_tensor = gnd_truth_tensor(target_detections)                
+
+                loss = criterion(pred_detections, target_tensor)
+                batch_loss += loss
+            batch_loss = batch_loss / Y.size(0)
+            eval_loss += batch_loss
+    eval_loss = eval_loss / len(dataloader)
+    return eval_loss
 
 def criterion(output, target):
     total_loss = 0.0
@@ -55,13 +77,13 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 100
+_NUM_EPOCHS_ = 2#TODO: Use 100
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
     transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
     transforms.ToTensor(),
-    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) #TODO: Add this when training
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
 
@@ -81,25 +103,31 @@ if __name__ == "__main__":
     class_names = build_class_names("./voc.names")
 
     model = Yolo_V1(class_names, 7, blocks)
+    # model.load_extraction_weights("extraction.conv.weights")
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([
-                {'params': model.extraction_layers.parameters(), 'lr': 1e-4},
+                {'params': model.extraction_layers.parameters(), 'lr': 1e-4}, #1e-3
                 {'params': model.final_conv.parameters()},
                 {'params': model.linear_layers.parameters()}
-            ], lr=1e-2, momentum=0.9)
+            ], lr=1e-2, momentum=0.9) 
     exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.1) #for transfer learning
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(_DEVICE_)
 
+    train_since = time.time()
     for epoch in range(_NUM_EPOCHS_):
-        print(f"Epoch {epoch}/{_NUM_EPOCHS_}")
+        print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}")
+        print("-----" * 10)
         epoch_loss = 0.0
+        epoch_since = time.time()
         model.train()
 
         for idx, data in enumerate(dataloader['train'],0):
-            images, detections = data            
+            images, detections = data#transform(data[0]), data[1]
+            images = images.to(_DEVICE_)
+            detections = detections.to(_DEVICE_)
             
             optimiser.zero_grad()
             
@@ -119,15 +147,38 @@ if __name__ == "__main__":
                 batch_loss += loss
                 
             iteration_loss = batch_loss / num_batch
-            epoch_loss += iteration_loss
-            print(f"Iteration {idx}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss}")
+            epoch_loss += iteration_loss.item()
+            print(f"\tIteration {idx}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
             
             iteration_loss.backward()
             optimiser.step()
 
-            exit(0)
         epoch_loss = epoch_loss / len(dataloader['train'])
-        print(f"Average Epoch loss is {epoch_loss}")        
+        epoch_elapsed = time.time() - epoch_since
+        print(f"\tAverage Train Epoch loss is {epoch_loss:.2f} [{epoch_elapsed//60:.0f}m {epoch_elapsed%60:.0f}s]")
+
+        exp_lr_scheduler.step()
+
+        #evaluate on the test dataset
+        test_loss = evaluate(model, dataloader['test'])
+        print(f"\tAverage Test Loss is {test_loss:.2f}")
+
+    #Evaluate on the validation dataset
+    val_loss = evaluate(model, dataloader['val'])
+    train_elapsed = time.time() - train_since
+    print(f"Validation loss is {val_loss:.2f}")
+    print(f"Total training time is [{train_elapsed//60:.0f}m {train_elapsed%60:.0f}s]")
+    
+    # Show the results on a random image
+    # rand_img, dets = dataset['val'][random.randint(0, len(dataset['val']))]
+    # X = transform(rand_img).unsqueeze(0)
+    # preds = model(X)
+    # print(preds.size())
+    # for det in dets:
+    #     show_detection(rand_img, det[1:], classes[int(det[0])], colour='green')
+    # # rand_img.show()
+    # exit(0)
+
 
 # See https://github.com/bentrevett/pytorch-seq2seq/blob/master/1%20-%20Sequence%20to%20Sequence%20Learning%20with%20Neural%20Networks.ipynb for inspiration
 
