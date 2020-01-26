@@ -25,26 +25,39 @@ class Yolo_V1(nn.Module):
         self.num_classes = len(class_names.keys())        
         self.grid = grid_size        
         self.blocks = blocks
-        self.extraction_layers, extract_out = self.parse_conv(blocks)
+        # self.extraction_layers, extract_out = self.parse_conv(blocks)
         resnet50 = models.resnet50(pretrained=True)
-        print(resnet50)
+        self.extraction_layers = nn.Sequential(*list(resnet50.children())[:-2])
+        
 
-        self.final_conv = nn.Conv2d(extract_out, 256, 3, 1, 1)
+        # self.final_conv = nn.Conv2d(extract_out, 256, 3, 1, 1)
+        self.final_conv = nn.Sequential(
+            nn.Conv2d(2048, 1024, 3, 1, 1), #2048 is the number of output filters from the last resnet bottleneck
+            nn.BatchNorm2d(1024),
+            nn.Conv2d(1024, 512, 3, 1, 1), 
+            nn.BatchNorm2d(512),
+            nn.Conv2d(512, 512, 3, 1, 1), 
+            nn.BatchNorm2d(512),
+            nn.Conv2d(512, 256, 3, 1, 0),
+            nn.BatchNorm2d(256)
+        )
         self.linear_layers = nn.Sequential(
-            nn.Linear(12*12*256,1715,True),
+            nn.Linear(12*12*256,4608,True),
             nn.Dropout(),
             nn.LeakyReLU(0.1, inplace=True),
-            nn.Linear(1715, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
+            nn.Linear(4608, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
             nn.ReLU(inplace=True)
         )        
         
-    def forward(self, x):        
-        actv = x
-        for i in range(len(self.extraction_layers)):
-            actv = self.extraction_layers[i](actv)                        
-            assert not torch.isnan(actv).any()
+    def forward(self, x):
 
-        actv = self.final_conv(actv)
+        actv = self.extraction_layers(x)
+        actv = self.final_conv(actv)        
+        
+        # actv = x
+        # for i in range(len(self.extraction_layers)):
+        #     actv = self.extraction_layers[i](actv)                        
+        #     assert not torch.isnan(actv).any()        
 
         lin_inp = torch.flatten(actv)
         lin_inp = lin_inp.view(x.size()[0],-1) #resize it so that it is flattened by batch             

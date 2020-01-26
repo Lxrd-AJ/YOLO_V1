@@ -77,7 +77,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 2#TODO: Use 100
+_NUM_EPOCHS_ = 4#TODO: Use 100
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
@@ -103,7 +103,6 @@ if __name__ == "__main__":
     class_names = build_class_names("./voc.names")
 
     model = Yolo_V1(class_names, 7, blocks)
-    # model.load_extraction_weights("extraction.conv.weights")
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([
                 {'params': model.extraction_layers.parameters(), 'lr': 1e-4}, #1e-3
