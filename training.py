@@ -77,7 +77,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 4#TODO: Use 100
+_NUM_EPOCHS_ = 150
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
@@ -106,10 +106,10 @@ if __name__ == "__main__":
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([
                 {'params': model.extraction_layers.parameters(), 'lr': 1e-4}, #1e-3
-                {'params': model.final_conv.parameters()},
+                {'params': model.final_conv.parameters(), 'lr': 1e-3}, 
                 {'params': model.linear_layers.parameters()}
             ], lr=1e-2, momentum=0.9) 
-    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.1) #for transfer learning
+    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=30, gamma=0.1) #for transfer learning
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -147,7 +147,8 @@ if __name__ == "__main__":
                 
             iteration_loss = batch_loss / num_batch
             epoch_loss += iteration_loss.item()
-            print(f"\tIteration {idx}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
+            if idx % 1000 == 0:
+                print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
             
             iteration_loss.backward()
             optimiser.step()
@@ -161,6 +162,11 @@ if __name__ == "__main__":
         #evaluate on the test dataset
         test_loss = evaluate(model, dataloader['test'])
         print(f"\tAverage Test Loss is {test_loss:.2f}")
+
+        # Save the model parameters https://pytorch.org/tutorials/beginner/saving_loading_models.html
+        if epoch % 10 == 0:
+            torch.save(model.state_dict(), "./yolo_v1_model.pth")
+            torch.save(optimiser.state_dict(), "./optimiser_yolo.pth")
 
     #Evaluate on the validation dataset
     val_loss = evaluate(model, dataloader['val'])

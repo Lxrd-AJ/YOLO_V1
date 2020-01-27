@@ -1,3 +1,6 @@
+optimiser_yolo.pth
+yolo_v1_model.pth
+
 extraction.conv.weights
 yolov1.weights
 

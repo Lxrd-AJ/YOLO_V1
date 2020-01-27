@@ -1,6 +1,5 @@
 """
 TODO:
-- [ ] Save the model every nth epoch
 - [ ] For inference, print the time taken, classifier confidence
 """
 import torch 
