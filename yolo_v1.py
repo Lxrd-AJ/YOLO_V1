@@ -16,14 +16,14 @@ from collections import OrderedDict
 
 
 class Yolo_V1(nn.Module):
-    def __init__(self, class_names, grid_size, blocks):
+    def __init__(self, class_names, grid_size, img_size=(448,448)):
         super(Yolo_V1,self).__init__()
         self.num_bbox = 2
-        self.input_size = (448,448)
+        self.input_size = img_size
         self.class_names = class_names
         self.num_classes = len(class_names.keys())        
         self.grid = grid_size        
-        self.blocks = blocks
+        # self.blocks = blocks
         # self.extraction_layers, extract_out = self.parse_conv(blocks)
         resnet50 = models.resnet50(pretrained=True)
         self.extraction_layers = nn.Sequential(*list(resnet50.children())[:-2])
@@ -33,15 +33,32 @@ class Yolo_V1(nn.Module):
         self.final_conv = nn.Sequential(
             nn.Conv2d(2048, 1024, 3, 1, 1), #2048 is the number of output filters from the last resnet bottleneck
             nn.BatchNorm2d(1024),
+            nn.ReLU(inplace=True),
+
             nn.Conv2d(1024, 512, 3, 1, 1), 
             nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+
             nn.Conv2d(512, 512, 3, 1, 1), 
             nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+
             nn.Conv2d(512, 256, 3, 1, 0),
-            nn.BatchNorm2d(256)
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+
+            nn.AdaptiveAvgPool2d((1,1))
         )
+        """
+        For input to the linear layers, formerly we assumed a fixed image size of 
+        448x448. Based on the `final_conv`, i know that the activation sizes here
+        would be 12x12x256.
+        To reduce the dependency on the input image size, we now use a 
+        Global Average Pooling operation. Therefore, we can always assume the 
+        input to our 1st linear layer would be `256`, the output channels of `final_conv`
+        """
         self.linear_layers = nn.Sequential(
-            nn.Linear(12*12*256,4608,True),
+            nn.Linear(256,4608,True),
             nn.Dropout(),
             nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(4608, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
@@ -51,7 +68,7 @@ class Yolo_V1(nn.Module):
     def forward(self, x):
 
         actv = self.extraction_layers(x)
-        actv = self.final_conv(actv)        
+        actv = self.final_conv(actv)                
         
         # actv = x
         # for i in range(len(self.extraction_layers)):
@@ -59,43 +76,43 @@ class Yolo_V1(nn.Module):
         #     assert not torch.isnan(actv).any()        
 
         lin_inp = torch.flatten(actv)
-        lin_inp = lin_inp.view(x.size()[0],-1) #resize it so that it is flattened by batch             
+        lin_inp = lin_inp.view(x.size()[0],-1) #resize it so that it is flattened by batch        
         lin_out = self.linear_layers(lin_inp)
         lin_out = torch.sigmoid(lin_out)            
         det_tensor = lin_out.view(-1,((self.num_bbox * 5) + self.num_classes),self.grid,self.grid)
         return det_tensor #torch.flatten(det_tensor)
 
     # NB: This func should be deprecated
-    def transform_predict(self, p_tensor):
-        batch_size = p_tensor.size(0)
-        stride = self.input_size[0] // p_tensor.size(2)
-        grid_size = self.input_size[0] // stride
-        num_bbox = (self.num_bbox * 5) + self.num_classes
-        predictions = p_tensor.view(batch_size, num_bbox, grid_size*grid_size)
-        predictions = predictions.transpose(1,2).contiguous()
-        num_bbox = 5 + self.num_classes
-        print(predictions.size())
+    # def transform_predict(self, p_tensor):
+    #     batch_size = p_tensor.size(0)
+    #     stride = self.input_size[0] // p_tensor.size(2)
+    #     grid_size = self.input_size[0] // stride
+    #     num_bbox = (self.num_bbox * 5) + self.num_classes
+    #     predictions = p_tensor.view(batch_size, num_bbox, grid_size*grid_size)
+    #     predictions = predictions.transpose(1,2).contiguous()
+    #     num_bbox = 5 + self.num_classes
+    #     print(predictions.size())
         
-        results = {}
-        for batch in range(predictions.size(0)):
-            prediction = predictions[batch]
+    #     results = {}
+    #     for batch in range(predictions.size(0)):
+    #         prediction = predictions[batch]
 
-            bboxes = prediction[:,:10]
-            bbox_1 = convert_center_coords_to_noorm( bboxes[:,:5] )
-            bbox_2 = convert_center_coords_to_noorm( bboxes[:,5:] )
-            bboxes = max_box(bbox_1, bbox_2)
+    #         bboxes = prediction[:,:10]
+    #         bbox_1 = convert_center_coords_to_noorm( bboxes[:,:5] )
+    #         bbox_2 = convert_center_coords_to_noorm( bboxes[:,5:] )
+    #         bboxes = max_box(bbox_1, bbox_2)
             
-            cls_probs = prediction[:,10:]
-            max_cprob, max_idx = cls_probs.max(1) #1 is along the rows            
-            pred_classes = convert_cls_idx_name(self.class_names, max_idx.numpy())
+    #         cls_probs = prediction[:,10:]
+    #         max_cprob, max_idx = cls_probs.max(1) #1 is along the rows            
+    #         pred_classes = convert_cls_idx_name(self.class_names, max_idx.numpy())
 
-            bboxes = torch.cat((bboxes, max_idx.unsqueeze(1).float()),1)            
-            bboxes = confidence_threshold(bboxes, 0.5) # confidence thresholding  (during predictions)          
-            #TODO: Continue; Non-maximum suppression for detections of a particular class
-            # use https://d2l.ai/chapter_computer-vision/anchor.html
-            results[batch] = bboxes
+    #         bboxes = torch.cat((bboxes, max_idx.unsqueeze(1).float()),1)            
+    #         bboxes = confidence_threshold(bboxes, 0.5) # confidence thresholding  (during predictions)          
+    #         #TODO: Continue; Non-maximum suppression for detections of a particular class
+    #         # use https://d2l.ai/chapter_computer-vision/anchor.html
+    #         results[batch] = bboxes
         
-        return results
+    #     return results
             
 
     """

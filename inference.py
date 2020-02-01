@@ -2,21 +2,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F 
 import numpy as np
-import cv2 as cv
+# import cv2 as cv
 from torch.autograd import Variable
-from models.utilities import *
+from utilities import build_class_names
 from PIL import Image, ImageOps
-from models.yolo_v1 import Yolo_V1
+from yolo_v1 import Yolo_V1
 
+#TODO: Continue Non-Maximum Suppression
 if __name__ == "__main__":
-    imagenet_config = "./models/extraction_imagenet.cfg"
-    blocks = parse_config(imagenet_config)
-    class_names = build_class_names("./models/voc.names")
-
-    model = Yolo_V1(class_names, 7, blocks)
-    # model.load_extraction_weights("./models/yolov1.weights") #extraction.conv.weights    
+    
+    class_names = build_class_names("./voc.names")
+    model = Yolo_V1(class_names, 7)
+    model.load_state_dict(torch.load('./yolo_v1_model.pth'))
     model.eval()
     
+    print(model)
     # Load the test image
     # x = torch.randn(3,3,448,448) # x = x.unsqueeze(0)
     

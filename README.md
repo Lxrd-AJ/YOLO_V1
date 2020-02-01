@@ -1,6 +1,8 @@
 # YOLO_V1
 You Only Look Once version 1
 
+YOLO V3 https://blog.paperspace.com/how-to-implement-a-yolo-v3-object-detector-from-scratch-in-pytorch-part-3/
+
 # To do
 - [x] Data Processing
     - [x] Download the VOC dataset
@@ -25,18 +27,16 @@ You Only Look Once version 1
                                             std=[0.229, 0.224, 0.225])
             `
     - [x] Save the model every n epochs
-- [ ] Inference
-    - [ ] Non-maximum suppression
-- [ ] Model Metrics evaluation
-    - https://github.com/rafaelpadilla/Object-Detection-Metrics
-    - https://towardsdatascience.com/breaking-down-mean-average-precision-map-ae462f623a52
-    - [ ] mAP (Mean average precision)
-    - [ ] Precision - Recall curve
-    - [ ] F-2 score
-- [ ] Increase batch size from 1 to 4
-- [ ] Open Images Challenge 
-    - https://storage.googleapis.com/openimages/web/challenge2019.html
-    - [ ] Custom dataset class
-- [ ] Datat Augmentation
-    - [ ] Random scaling
-    - [ ] Random translation
+
+
+
+- [ ] Blog Post
+    - [x] create new branch for yolo v1
+    - [x] update project dependencies
+    - [x] add new page for yolo publication    
+    - Resources
+        - https://medium.com/oracledevs/final-layers-and-loss-functions-of-single-stage-detectors-part-1-4abbfa9aa71c
+    - [x] Structure Blog Post
+    - [ ] Fix bug in ci.yml script
+        - echo "$SSH_CANOPUS_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+        - `ssh-add` needs to stop asking for a passphrase        

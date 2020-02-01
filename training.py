@@ -38,6 +38,7 @@ def evaluate(model, dataloader):
     eval_loss = eval_loss / len(dataloader)
     return eval_loss
 
+
 def criterion(output, target):
     total_loss = 0.0
     num_grids = output.size()
@@ -56,7 +57,6 @@ def criterion(output, target):
             truth_probs = truth_bbox[5:]
 
             if truth_bbox.sum() > 0: #there is an object in this class
-                
                 max_bbox, min_bbox = (bbox_1, bbox_2) if iou(_bbox_1,_truth_bbox) > iou(_bbox_2, _truth_bbox) else (bbox_2, bbox_1)
                 confidence = max(iou(_bbox_1, _truth_bbox),iou(_bbox_2, _truth_bbox))
                 truth_bbox[0] = confidence #the ground truth data uses confidence 
@@ -66,14 +66,17 @@ def criterion(output, target):
                 #loss is weighted bounding box regression + weighted no object + class probabilities
                 loss_gx_gy = (z.t().matmul(Q).matmul(z)) + (0.5 * min_bbox[0]) + (truth_probs - class_probs).t().matmul(truth_probs - class_probs)                            
             else:
-                loss_gx_gy = 0.5 * ((bbox_1[0]*bbox_1[0]) + (bbox_2[0]*bbox_2[0])) #0.5 is the weight when there is no object
+                #0.5 is the weight when there is no object
+                #0.5 is multiplied by the class confidences for each bounding box in the current grid
+                loss_gx_gy = 0.5 * ((bbox_1[0]*bbox_1[0]) + (bbox_2[0]*bbox_2[0])) 
             
             total_loss += loss_gx_gy
     return total_loss
 
 
 _GRID_SIZE_ = 7
-_IMAGE_SIZE_ = (448,448)
+# _IMAGE_SIZE_ = (448,448)
+_IMAGE_SIZE_ = (112,112) #TODO: Remove this once debugging is finished
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -87,7 +90,7 @@ transform = transforms.Compose([
 ])
 
 
-dataset = { x: VOCDataset(f"./data/{x}.txt", grid_size=_GRID_SIZE_, transform=transform) 
+dataset = { x: VOCDataset(f"./data/{x}.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_, transform=transform)
             for x in ['train','test','val']}
 dataloader = {x: utils.data.DataLoader(dataset[x], batch_size=_BATCH_SIZE_, shuffle=True, num_workers=4)
                 for x in ['train','test','val']}
@@ -102,14 +105,14 @@ if __name__ == "__main__":
     blocks = parse_config(imagenet_config)
     class_names = build_class_names("./voc.names")
 
-    model = Yolo_V1(class_names, 7, blocks)
+    model = Yolo_V1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([
                 {'params': model.extraction_layers.parameters(), 'lr': 1e-4}, #1e-3
-                {'params': model.final_conv.parameters(), 'lr': 1e-3}, 
+                {'params': model.final_conv.parameters(), 'lr': 1e-2}, 
                 {'params': model.linear_layers.parameters()}
             ], lr=1e-2, momentum=0.9) 
-    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=30, gamma=0.1) #for transfer learning
+    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=50, gamma=0.1) #for transfer learning
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -147,7 +150,7 @@ if __name__ == "__main__":
                 
             iteration_loss = batch_loss / num_batch
             epoch_loss += iteration_loss.item()
-            if idx % 1000 == 0:
+            if True:#idx % 1000 == 0:
                 print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
             
             iteration_loss.backward()
