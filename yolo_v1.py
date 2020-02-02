@@ -10,7 +10,7 @@ import ctypes
 import os
 from torchvision import models
 from PIL import Image
-from utilities import convert_center_coords_to_noorm, max_box, convert_cls_idx_name, confidence_threshold #parse_config
+# from utilities import convert_center_coords_to_noorm, max_box, convert_cls_idx_name, confidence_threshold #parse_config
 from pprint import pprint
 from collections import OrderedDict
 
@@ -80,7 +80,7 @@ class Yolo_V1(nn.Module):
         lin_out = self.linear_layers(lin_inp)
         lin_out = torch.sigmoid(lin_out)            
         det_tensor = lin_out.view(-1,((self.num_bbox * 5) + self.num_classes),self.grid,self.grid)
-        return det_tensor #torch.flatten(det_tensor)
+        return det_tensor 
 
     # NB: This func should be deprecated
     # def transform_predict(self, p_tensor):

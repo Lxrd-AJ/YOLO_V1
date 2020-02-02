@@ -39,9 +39,13 @@ def evaluate(model, dataloader):
     return eval_loss
 
 
+"""
+- Does not support batching, it operates on a single target-output pair
+"""
 def criterion(output, target):
     total_loss = 0.0
     num_grids = output.size()
+    #TODO: Reduce this to a single for-loop using np.meshgrid
     for grid_x in range(num_grids[0]):
         for grid_y in range(num_grids[1]):
             truth_bbox = target[grid_x, grid_y]

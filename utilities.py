@@ -4,6 +4,9 @@ import math
 from PIL import Image, ImageDraw, ImageFont
 
 
+def nms(bboxes):
+    pass
+
 """
 Convert from center normalised coordinates to YOLO bounding box encoding
 
@@ -37,7 +40,7 @@ def convert_center_coords_to_YOLO(detections, grid_size=7):
 
 
 """
-converts the output of a YOLO model to a center coordinate where x,y is the center of the box and w,h represent the width
+converts the output of a YOLO model to a center coordinate where x,y is the center of the box and w,h represent the square root of width
 and height of the image, this is not noormalised by the image width and height.
 - bbox is in the format [x y w h]
 
@@ -69,13 +72,13 @@ def gnd_truth_tensor(detections, grid_size=7, num_classes=20):
     return x
 
 """
-- bbox cls <x> <y> <width> <height> is in normalised center coordinates where 
+- bbox: [<x> <y> <width> <height>] is in normalised center coordinates where 
     x,y is the center of the box relative to the width and height of the image (grid cell)
         where x is ((x_max + x_min)/2)/width
     width and height is normalised relative to the width and height of `image`
 - image: should be a PIL image
 """
-def show_detection(image, bbox, name, colour="white"):
+def draw_detection(image, bbox, name, colour="white"):
     width, height = image.size
     
     box_width = int(bbox[2] * width)
@@ -120,6 +123,10 @@ def build_class_names(class_file):
     names_dict = {idx:e for idx, e in enumerate(names)}    
     return names_dict
 
+"""
+Returns the bounding box with the highest confidence score
+- Each bounding box `b1` is in the format [conf, x, y, w, h]
+"""
 def max_box(b1, b2):
     assert b1.size() == b2.size()
     A = torch.zeros(b1.size()).float()
@@ -128,9 +135,13 @@ def max_box(b1, b2):
         A[i,:] = b1[i,:] if b1[i,0] > b2[i,0] else b2[i,:]
     return A
 
+"""
+For a grid size of (7,7), It expects `A` to be of size 49x6
+Assumes the class confidence score is the first element
+"""
 def confidence_threshold(A, conf_thresh):
     #0 is the index of the confidence value
-    conf_mask = (A[:,0] > conf_thresh).float().unsqueeze(1)
+    conf_mask = (A[:,0] > conf_thresh).float().unsqueeze(1)    
     conf_mask = conf_mask * A
     conf_mask = torch.nonzero(conf_mask[:,0]).squeeze()
     return A[conf_mask,:]    
@@ -180,26 +191,26 @@ def _iou(a,b):
     
         
 
-def convert_center_coords_to_noorm(bboxes):
-    (rows,cols) = (7,7)    
-    stride = 64
-    assert (rows * cols) == bboxes.size(0)
-    #generate the strides for each grid position  
-    grid_size = 7  
-    grid = np.arange(grid_size)
-    row,col = np.meshgrid(grid,grid)
-    row = torch.FloatTensor(row).view(-1,1)
-    col = torch.FloatTensor(col).view(-1,1)
-    grid = torch.cat((row,col),1) * stride
-    # center coordinates
-    bboxes[:,1:3] = (bboxes[:,1:3] * stride).round()
-    bboxes[:,1:3] = bboxes[:,1:3] + grid
-    bboxes[:,3:] = (bboxes[:,3:].pow(2) * 448).round()
-    # Convert x,y to top left coords and leave the width and height as they are
-    bboxes[:,1] -= bboxes[:,3]/2
-    bboxes[:,2] -= bboxes[:,4]/2
+# def convert_center_coords_to_noorm(bboxes):
+#     (rows,cols) = (7,7)    
+#     stride = 64
+#     assert (rows * cols) == bboxes.size(0)
+#     #generate the strides for each grid position  
+#     grid_size = 7  
+#     grid = np.arange(grid_size)
+#     row,col = np.meshgrid(grid,grid)
+#     row = torch.FloatTensor(row).view(-1,1)
+#     col = torch.FloatTensor(col).view(-1,1)
+#     grid = torch.cat((row,col),1) * stride
+#     # center coordinates
+#     bboxes[:,1:3] = (bboxes[:,1:3] * stride).round()
+#     bboxes[:,1:3] = bboxes[:,1:3] + grid
+#     bboxes[:,3:] = (bboxes[:,3:].pow(2) * 448).round()
+#     # Convert x,y to top left coords and leave the width and height as they are
+#     bboxes[:,1] -= bboxes[:,3]/2
+#     bboxes[:,2] -= bboxes[:,4]/2
     
-    return bboxes
+#     return bboxes
 
 
 def convert_cls_idx_name(name_mapping, arr):
