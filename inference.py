@@ -23,6 +23,13 @@ class_names = build_class_names("./voc.names")
 
 dataset = VOCDataset(f"./data/val.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_)
 
+class_color_mapping = {
+    0: "red", 1: "blue", 2: "AntiqueWhite", 3: "Aquamarine", 4: "Black",
+    5: "SeaGreen", 6: "Chartreuse", 7: "Chocolate", 8:"MediumAquaMarine", 9: "DarkGoldenRod",
+    10: "DarkGreen", 11: "DarkOrchid", 12: "DeepSkyBlue", 13: "DarkSlateGrey", 14: "DarkSalmon",
+    15: "DimGrey", 16: "SlateBlue", 17: "Fuchsia", 18: "Gold", 19: "IndianRed"
+}
+
 if __name__ == "__main__":
     model = Yolo_V1(class_names, 7)
     model.load_state_dict(torch.load('./yolo_v1_model.pth'))
@@ -85,8 +92,9 @@ if __name__ == "__main__":
             print(f"Len {len(bboxes)} after NMS")
 
             #TEST: Show the predictions
-            for bbox in bboxes:                
-                draw_detection(X__,bbox[1:5] / _IMAGE_SIZE_[0], class_names[int(bbox[5])], "red")
+            for bbox in bboxes:        
+                c = int(bbox[5])        
+                draw_detection(X__,bbox[1:5] / _IMAGE_SIZE_[0], class_names[c], class_color_mapping[c])
             X__.show()
             # X.show()
         # print(predictions.size())

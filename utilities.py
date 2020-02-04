@@ -128,7 +128,7 @@ def draw_detection(image, bbox, name, colour="white"):
 
     draw = ImageDraw.Draw(image)
     draw.rectangle((top_left, bottom_right), width=2, outline=colour)
-    draw.text(top_left, name, font=ImageFont.truetype("Helvetica",15), fill=(250,150,118,255))
+    draw.text(top_left, name, font=ImageFont.truetype("Helvetica",15), fill=(250,180,148,255))
 
 
 def parse_config(cfg_file):
