@@ -6,7 +6,7 @@ import numpy as np
 import random
 # import cv2 as cv
 from torch.autograd import Variable
-from utilities import build_class_names, draw_detection, confidence_threshold, max_box
+from utilities import build_class_names, draw_detection, confidence_threshold, max_box, nms
 from PIL import Image, ImageOps
 from yolo_v1 import Yolo_V1
 from data.voc_dataset import VOCDataset
@@ -50,7 +50,7 @@ if __name__ == "__main__":
         sz = predictions.size()    
         predictions = predictions.view(sz[0], sz[1], -1) # change from 1x30x7x7 to 1x30x49
         predictions = predictions.transpose(1,2).contiguous() #change from 1x30x49 to 1x49x30
-        print(predictions.size())
+        
         detection_results = {}
         for batch_idx in range(sz[0]): #Operate over the predictions in a batch
             pred = predictions[batch_idx]
@@ -80,12 +80,14 @@ if __name__ == "__main__":
 
             #confidence threshold the bounding boxes by their class confidence scores            
             bboxes = confidence_threshold(bboxes, 0.5)
-            print(bboxes)
+            print(f"Len {bboxes.size(0)} b4 NMS")
+            bboxes = nms(bboxes, 0.1)
+            print(f"Len {len(bboxes)} after NMS")
 
             #TEST: Show the predictions
             for bbox in bboxes:                
                 draw_detection(X__,bbox[1:5] / _IMAGE_SIZE_[0], class_names[int(bbox[5])], "red")
-            # X__.show()
+            X__.show()
             # X.show()
         # print(predictions.size())
 

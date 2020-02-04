@@ -4,8 +4,44 @@ import math
 from PIL import Image, ImageDraw, ImageFont
 
 
-def nms(bboxes):
-    pass
+"""
+Non-Maximum Suppression
+- bboxes: Expected to be of size 'num_boxes x 6'
+"""
+def nms(bboxes, threshold):    
+    # Get the bounding boxes for each class
+    classes = bboxes[:,5].int().tolist()
+    classes = list(set(classes))
+    results = []
+    for cls in classes:
+        cls_mask = (bboxes[:,5] == float(cls)).unsqueeze(1) * bboxes        
+        #use the class confidence, as it is not possible for this to be zero due to confidence thresholding
+        cls_mask = torch.nonzero(cls_mask[:,0]).squeeze()
+        class_preds = bboxes[cls_mask,:]
+        
+        if len(list(class_preds.size())) > 1: #if more then 1 bbox belongs to this class
+            #`torch.sort` fails on single dimensional tensors hence this if block
+            sorted_conf, sort_indices = torch.sort(class_preds[:,0], descending=True)
+            class_preds = class_preds[sort_indices]
+            
+            for idx in range(class_preds.size(0)-1):
+                cur_box = class_preds[idx]
+                other_boxes = class_preds[idx+1:]
+                repeated_cur_box = cur_box.repeat(other_boxes.size(0),1)
+
+                ious = _iou(repeated_cur_box, other_boxes)
+                if (ious < threshold).all():                    
+                    results.append(cur_box)
+
+                #if on the last box then add it as no other box before it will have a 
+                # high iou with this box, if it did, it will be not have been added to
+                # results
+                if other_boxes.size(0) == 1: 
+                    results.append(other_boxes[0])                
+        else:
+            results.append(class_preds)
+
+    return results #FIXME: Ideally this should be a tensor not a python list
 
 """
 Convert from center normalised coordinates to YOLO bounding box encoding
