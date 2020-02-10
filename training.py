@@ -79,8 +79,8 @@ def criterion(output, target):
 
 
 _GRID_SIZE_ = 7
-# _IMAGE_SIZE_ = (448,448)
-_IMAGE_SIZE_ = (112,112) #TODO: Remove this once debugging is finished
+_IMAGE_SIZE_ = (448,448)
+# _IMAGE_SIZE_ = (112,112)
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -121,6 +121,9 @@ if __name__ == "__main__":
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(_DEVICE_)
+
+    # Save the model before training starts
+    torch.save(model.state_dict(), "./yolo_v1_model.pth")
 
     train_since = time.time()
     for epoch in range(_NUM_EPOCHS_):
