@@ -13,7 +13,7 @@ from PIL import Image
 from pprint import pprint
 from collections import OrderedDict
 from data.voc_dataset import VOCDataset
-from utilities import show_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor
+from utilities import draw_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor
 from yolo_v1 import Yolo_V1
 
 
