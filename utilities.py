@@ -1,7 +1,32 @@
 import numpy as np 
+import matplotlib.pyplot as plt
 import torch
 import math
 from PIL import Image, ImageDraw, ImageFont
+
+def imshow(inp, title=None):
+    """Imshow for Tensor."""
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    inp = std * inp + mean
+    inp = np.clip(inp, 0, 1)
+    plt.imshow(inp)
+    if title is not None:
+        plt.title(title)
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    plt.waitforbuttonpress()
+
+def im2PIL(inp):
+    """Converts Tensor to PIL Image"""
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    inp = std * inp + mean
+    inp = np.clip(inp, 0, 1)
+    inp = np.uint8(inp * 255)    
+    inp = Image.fromarray(inp)
+    return inp
 
 
 """
@@ -128,7 +153,7 @@ def draw_detection(image, bbox, name, colour="white"):
 
     draw = ImageDraw.Draw(image)
     draw.rectangle((top_left, bottom_right), width=2, outline=colour)
-    draw.text(top_left, name, fill=(250,180,148,255)) #, font=ImageFont.truetype("Helvetica",15)
+    draw.text(top_left, name.upper(), fill=(250,180,148,255)) #, font=ImageFont.truetype("Helvetica",15)
 
 
 def parse_config(cfg_file):

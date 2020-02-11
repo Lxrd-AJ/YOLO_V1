@@ -13,7 +13,7 @@ from PIL import Image
 from pprint import pprint
 from collections import OrderedDict
 from data.voc_dataset import VOCDataset
-from utilities import draw_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor
+from utilities import draw_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL
 from yolo_v1 import Yolo_V1
 from torchviz import make_dot
 from graphviz import Source
@@ -83,7 +83,6 @@ def criterion(output, target):
 
 _GRID_SIZE_ = 7
 _IMAGE_SIZE_ = (448,448)
-# _IMAGE_SIZE_ = (112,112)
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -91,7 +90,7 @@ _NUM_EPOCHS_ = 150
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
-    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
+    # transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
@@ -150,25 +149,26 @@ if __name__ == "__main__":
             iteration_loss = 0.0
             num_batch = detections.size(0)
 
-            # Having 3 foor-loops might be slow, this could be improved later as premature optimisation is the root of all evils
-            for batch_idx in range(num_batch):
-                pred_detections = predictions[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
-                target_detections = convert_center_coords_to_YOLO(detections[batch_idx], _GRID_SIZE_)
-                target_tensor = gnd_truth_tensor(target_detections)                
+            with torch.set_grad_enabled(True):
+                # Having 3 foor-loops might be slow, this could be improved later as premature optimisation is the root of all evils
+                for batch_idx in range(num_batch):
+                    pred_detections = predictions[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
+                    target_detections = convert_center_coords_to_YOLO(detections[batch_idx], _GRID_SIZE_)
+                    target_tensor = gnd_truth_tensor(target_detections)                
 
-                loss = criterion(pred_detections, target_tensor)
-                batch_loss += loss
+                    loss = criterion(pred_detections, target_tensor)
+                    batch_loss += loss
+                    
+                iteration_loss = batch_loss / num_batch
+                epoch_loss += iteration_loss.item()
+                if idx % 1000 == 0:
+                    print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
                 
-            iteration_loss = batch_loss / num_batch
-            epoch_loss += iteration_loss.item()
-            if idx % 1000 == 0:
-                print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
-            
-            arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
-            Source(march).render("./model_arch")
+                arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
+                Source(march).render("./model_arch")
 
-            iteration_loss.backward()
-            optimiser.step()
+                iteration_loss.backward()
+                optimiser.step()
 
         epoch_loss = epoch_loss / len(dataloader['train'])
         epoch_elapsed = time.time() - epoch_since
