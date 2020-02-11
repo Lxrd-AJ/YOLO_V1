@@ -15,6 +15,8 @@ from collections import OrderedDict
 from data.voc_dataset import VOCDataset
 from utilities import draw_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor
 from yolo_v1 import Yolo_V1
+from torchviz import make_dot
+from graphviz import Source
 
 
 
@@ -24,6 +26,7 @@ def evaluate(model, dataloader):
     with torch.no_grad():
         for idx, data in enumerate(dataloader, 0):
             X, Y = data #transform(data[0]), data[1]
+            X = X.to(_DEVICE_)
             res = model(X)
             batch_loss = 0.0
             for batch_idx in range(Y.size(0)):
@@ -49,7 +52,7 @@ def criterion(output, target):
     for grid_x in range(num_grids[0]):
         for grid_y in range(num_grids[1]):
             truth_bbox = target[grid_x, grid_y]
-            pred_bboxs = output[grid_x, grid_y]
+            pred_bboxs = output[grid_x, grid_y].cpu()
             
             # Find the intersection over unio between the two predicted bounding boxes at the grid location
             bbox_1, bbox_2 = pred_bboxs[0:5], pred_bboxs[5:10]
@@ -113,10 +116,12 @@ if __name__ == "__main__":
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([
                 {'params': model.extraction_layers.parameters(), 'lr': 1e-4}, #1e-3
-                {'params': model.final_conv.parameters(), 'lr': 1e-2}, 
+                {'params': model.final_conv.parameters(), 'lr': 1e-1}, 
                 {'params': model.linear_layers.parameters()}
-            ], lr=1e-2, momentum=0.9) 
-    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=50, gamma=0.1) #for transfer learning
+            ], lr=1e-1, momentum=0.9)
+    
+    #The learning rate scheduler will be added later post model debugging
+    # exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=50, gamma=0.1) #for transfer learning
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -128,15 +133,14 @@ if __name__ == "__main__":
     train_since = time.time()
     for epoch in range(_NUM_EPOCHS_):
         print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}")
-        print("-----" * 10)
+        print("-----" * 15)
         epoch_loss = 0.0
         epoch_since = time.time()
         model.train()
 
         for idx, data in enumerate(dataloader['train'],0):
-            images, detections = data#transform(data[0]), data[1]
-            images = images.to(_DEVICE_)
-            detections = detections.to(_DEVICE_)
+            images, detections = data
+            images = images.to(_DEVICE_)            
             
             optimiser.zero_grad()
             
@@ -157,9 +161,12 @@ if __name__ == "__main__":
                 
             iteration_loss = batch_loss / num_batch
             epoch_loss += iteration_loss.item()
-            if True:#idx % 1000 == 0:
+            if idx % 1000 == 0:
                 print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
             
+            arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
+            Source(march).render("./model_arch")
+
             iteration_loss.backward()
             optimiser.step()
 
@@ -167,7 +174,7 @@ if __name__ == "__main__":
         epoch_elapsed = time.time() - epoch_since
         print(f"\tAverage Train Epoch loss is {epoch_loss:.2f} [{epoch_elapsed//60:.0f}m {epoch_elapsed%60:.0f}s]")
 
-        exp_lr_scheduler.step()
+        # exp_lr_scheduler.step()
 
         #evaluate on the test dataset
         test_loss = evaluate(model, dataloader['test'])
@@ -184,16 +191,4 @@ if __name__ == "__main__":
     print(f"Validation loss is {val_loss:.2f}")
     print(f"Total training time is [{train_elapsed//60:.0f}m {train_elapsed%60:.0f}s]")
     
-    # Show the results on a random image
-    # rand_img, dets = dataset['val'][random.randint(0, len(dataset['val']))]
-    # X = transform(rand_img).unsqueeze(0)
-    # preds = model(X)
-    # print(preds.size())
-    # for det in dets:
-    #     show_detection(rand_img, det[1:], classes[int(det[0])], colour='green')
-    # # rand_img.show()
-    # exit(0)
-
-
-# See https://github.com/bentrevett/pytorch-seq2seq/blob/master/1%20-%20Sequence%20to%20Sequence%20Learning%20with%20Neural%20Networks.ipynb for inspiration
 

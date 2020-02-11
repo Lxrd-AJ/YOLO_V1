@@ -9,8 +9,14 @@ data/VOC2012test.tar
 data/VOCtest_06-Nov-2007.tar
 data/VOCtrainval_06-Nov-2007.tar
 data/VOCtrainval_11-May-2012.tar
-
-
+data/2007_test.txt
+data/2007_train.txt
+data/2007_val.txt
+data/2012_train.txt
+data/2012_val.txt
+data/train.txt
+data/test.txt
+data/val.txt
 
 
 
