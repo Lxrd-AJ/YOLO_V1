@@ -132,6 +132,12 @@ def gnd_truth_tensor(detections, grid_size=7, num_classes=20):
         x[grid_x, grid_y, cls_idx] = 1        
     return x
 
+
+def draw_detections(image, detections, class_names):    
+    for det in detections:
+        draw_detection(image, det[1:], class_names[int(det[0])])
+    return image
+
 """
 - bbox: [<x> <y> <width> <height>] is in normalised center coordinates where 
     x,y is the center of the box relative to the width and height of the image (grid cell)

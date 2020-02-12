@@ -18,6 +18,8 @@ data/train.txt
 data/test.txt
 data/val.txt
 
+model_arch
+model_arch.pdf
 
 
 

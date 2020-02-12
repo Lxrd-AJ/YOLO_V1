@@ -13,7 +13,7 @@ from PIL import Image
 from pprint import pprint
 from collections import OrderedDict
 from data.voc_dataset import VOCDataset
-from utilities import draw_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL
+from utilities import draw_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL, draw_detections
 from yolo_v1 import Yolo_V1
 from torchviz import make_dot
 from graphviz import Source
@@ -86,7 +86,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 150
+_NUM_EPOCHS_ = 150#150
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
@@ -112,10 +112,11 @@ if __name__ == "__main__":
     class_names = build_class_names("./voc.names")
 
     model = Yolo_V1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
+    model.init_weights()
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([
                 {'params': model.extraction_layers.parameters(), 'lr': 1e-4}, #1e-3
-                {'params': model.final_conv.parameters(), 'lr': 1e-1}, 
+                {'params': model.final_conv.parameters(), 'lr': 1e-2}, 
                 {'params': model.linear_layers.parameters()}
             ], lr=1e-1, momentum=0.9)
     
@@ -143,6 +144,16 @@ if __name__ == "__main__":
             
             optimiser.zero_grad()
             
+            #+++++++++++++++++++++++++++++++++++
+            #Passing junk data
+            # images = torch.randn(2, 3, 448, 448)
+            # detections = torch.rand(_BATCH_SIZE_, 1, 5)
+            # detections[:,:,0] *= 20
+            
+            # x = im2PIL(images[0])            
+            # x = draw_detections(x, detections[0], class_names)            
+            #+++++++++++++++++++++++++++++++++++
+            
             predictions = model(images)
 
             batch_loss = 0.0
@@ -161,11 +172,11 @@ if __name__ == "__main__":
                     
                 iteration_loss = batch_loss / num_batch
                 epoch_loss += iteration_loss.item()
-                if idx % 1000 == 0:
+                if True: #idx % 1000 == 0:
                     print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
                 
-                arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
-                Source(march).render("./model_arch")
+                    m_arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
+                    Source(m_arch).render("./model_arch")
 
                 iteration_loss.backward()
                 optimiser.step()

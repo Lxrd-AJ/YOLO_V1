@@ -1,7 +1,3 @@
-"""
-TODO:
-- [ ] For inference, print the time taken, classifier confidence
-"""
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F 
@@ -22,7 +18,7 @@ class Yolo_V1(nn.Module):
         self.input_size = img_size
         self.class_names = class_names
         self.num_classes = len(class_names.keys())        
-        self.grid = grid_size        
+        self.grid = grid_size
         # self.blocks = blocks
         # self.extraction_layers, extract_out = self.parse_conv(blocks)
         resnet50 = models.resnet50(pretrained=True)
@@ -32,20 +28,20 @@ class Yolo_V1(nn.Module):
         # self.final_conv = nn.Conv2d(extract_out, 256, 3, 1, 1)
         self.final_conv = nn.Sequential(
             nn.Conv2d(2048, 1024, 3, 1, 1), #2048 is the number of output filters from the last resnet bottleneck
-            nn.BatchNorm2d(1024),
-            nn.ReLU(inplace=True),
+            # nn.BatchNorm2d(1024),
+            nn.LeakyReLU(0.1, inplace=True),
 
             nn.Conv2d(1024, 512, 3, 1, 1), 
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
+            # nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.1, inplace=True),
 
             nn.Conv2d(512, 512, 3, 1, 1), 
-            nn.BatchNorm2d(512),
-            nn.ReLU(inplace=True),
+            # nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.1, inplace=True),
 
             nn.Conv2d(512, 256, 3, 1, 0),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
+            # nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.1, inplace=True),
 
             nn.AdaptiveAvgPool2d((1,1))
         )
@@ -58,13 +54,13 @@ class Yolo_V1(nn.Module):
         input to our 1st linear layer would be `256`, the output channels of `final_conv`
         """
         self.linear_layers = nn.Sequential(
-            nn.Linear(256,4608,True),
+            nn.Linear(256,512,True),
             nn.Dropout(),
             nn.LeakyReLU(0.1, inplace=True),
-            nn.Linear(4608, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
-            nn.ReLU(inplace=True)
-        )        
+            nn.Linear(512, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes))
+        )
         
+
     def forward(self, x):
 
         actv = self.extraction_layers(x)
@@ -80,68 +76,56 @@ class Yolo_V1(nn.Module):
         lin_out = self.linear_layers(lin_inp)
         lin_out = torch.sigmoid(lin_out)            
         det_tensor = lin_out.view(-1,((self.num_bbox * 5) + self.num_classes),self.grid,self.grid)
-        return det_tensor 
+        return det_tensor
 
-    # NB: This func should be deprecated
-    # def transform_predict(self, p_tensor):
-    #     batch_size = p_tensor.size(0)
-    #     stride = self.input_size[0] // p_tensor.size(2)
-    #     grid_size = self.input_size[0] // stride
-    #     num_bbox = (self.num_bbox * 5) + self.num_classes
-    #     predictions = p_tensor.view(batch_size, num_bbox, grid_size*grid_size)
-    #     predictions = predictions.transpose(1,2).contiguous()
-    #     num_bbox = 5 + self.num_classes
-    #     print(predictions.size())
+    """
+    Weight Initialisation will help present the network from stalling, where
+    it doesn't learn anything at all
+    """
+    def init_weights(self):
+        def init(layer, a=0.1):
+            nn.init.kaiming_uniform_(layer.weight, a)
+            layer.bias.data.fill_(0.01)
         
-    #     results = {}
-    #     for batch in range(predictions.size(0)):
-    #         prediction = predictions[batch]
+        gain_leaky_relu = nn.init.calculate_gain('leaky_relu', 0.1)
+        gain_sig = nn.init.calculate_gain('sigmoid')
 
-    #         bboxes = prediction[:,:10]
-    #         bbox_1 = convert_center_coords_to_noorm( bboxes[:,:5] )
-    #         bbox_2 = convert_center_coords_to_noorm( bboxes[:,5:] )
-    #         bboxes = max_box(bbox_1, bbox_2)
-            
-    #         cls_probs = prediction[:,10:]
-    #         max_cprob, max_idx = cls_probs.max(1) #1 is along the rows            
-    #         pred_classes = convert_cls_idx_name(self.class_names, max_idx.numpy())
+        for layer in self.final_conv:
+            if isinstance(layer, nn.Conv2d):
+                init(layer, gain_leaky_relu)
 
-    #         bboxes = torch.cat((bboxes, max_idx.unsqueeze(1).float()),1)            
-    #         bboxes = confidence_threshold(bboxes, 0.5) # confidence thresholding  (during predictions)          
-    #         #TODO: Continue; Non-maximum suppression for detections of a particular class
-    #         # use https://d2l.ai/chapter_computer-vision/anchor.html
-    #         results[batch] = bboxes
-        
-    #     return results
-            
+        init(self.linear_layers[0], gain_leaky_relu)
+        init(self.linear_layers[3], gain_sig)        
+
+
 
     """
     Returns the convolutional blocks in the YOLO module architecture
     This is based on the extraction net architecture as described here https://pjreddie.com/darknet/imagenet/#extraction
     """
-    def seq_conv(self, item, module, idx, in_channels):
-        padding = int(item['pad'])
-        kernel_size = int(item['size'])
-        stride = int(item['stride'])               
-        pad = int(item['pad'])
-        filters = int(item['filters'])
-        activation = item['activation']
-        try:
-            batch_norm = bool(item['batch_normalize'])
-        except:
-            batch_norm = False
-        bias = False if batch_norm else True
+    # def seq_conv(self, item, module, idx, in_channels):
+    #     padding = int(item['pad'])
+    #     kernel_size = int(item['size'])
+    #     stride = int(item['stride'])               
+    #     pad = int(item['pad'])
+    #     filters = int(item['filters'])
+    #     activation = item['activation']
+    #     try:
+    #         batch_norm = bool(item['batch_normalize'])
+    #     except:
+    #         batch_norm = False
+    #     bias = False if batch_norm else True
 
-        module.add_module(f'conv_{idx}', nn.Conv2d(in_channels, filters, kernel_size, stride, pad, bias=bias))
-        if batch_norm:
-            module.add_module(f"batch_norm_{idx}", nn.BatchNorm2d(filters))
+    #     module.add_module(f'conv_{idx}', nn.Conv2d(in_channels, filters, kernel_size, stride, pad, bias=bias))
+    #     if batch_norm:
+    #         module.add_module(f"batch_norm_{idx}", nn.BatchNorm2d(filters))
 
-        if activation == 'leaky':
-            module.add_module(f"leaky_{idx}", nn.LeakyReLU(0.1, inplace=True))
-        else:
-            print("Unknown activation function provided for YOLO v1")
+    #     if activation == 'leaky':
+    #         module.add_module(f"leaky_{idx}", nn.LeakyReLU(0.1, inplace=True))
+    #     else:
+    #         print("Unknown activation function provided for YOLO v1")
 
-        return module, filters
+    #     return module, filters
 
     def parse_conv(self, blocks):
         conv_layers = nn.ModuleList()              
