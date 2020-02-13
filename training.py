@@ -86,7 +86,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 1
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 150#150
+_NUM_EPOCHS_ = 15#150
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
@@ -172,7 +172,7 @@ if __name__ == "__main__":
                     
                 iteration_loss = batch_loss / num_batch
                 epoch_loss += iteration_loss.item()
-                if True: #idx % 1000 == 0:
+                if True: #TODO: Remove #idx % 1000 == 0:
                     print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
                 
                     m_arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
