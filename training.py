@@ -17,6 +17,7 @@ from utilities import draw_detection, parse_config, build_class_names, iou, conv
 from yolo_v1 import Yolo_V1
 from torchviz import make_dot
 from graphviz import Source
+from loss import criterion
 
 
 
@@ -32,53 +33,14 @@ def evaluate(model, dataloader):
             for batch_idx in range(Y.size(0)):
                 pred_detections = res[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
                 target_detections = convert_center_coords_to_YOLO(Y[batch_idx], _GRID_SIZE_)
-                target_tensor = gnd_truth_tensor(target_detections)                
-
-                loss = criterion(pred_detections, target_tensor)
+                target_tensor = gnd_truth_tensor(target_detections)
+                loss = criterion(pred_detections, target_tensor, _STRIDE_)
                 batch_loss += loss
             batch_loss = batch_loss / Y.size(0)
             eval_loss += batch_loss
     eval_loss = eval_loss / len(dataloader)
     return eval_loss
 
-
-"""
-- Does not support batching, it operates on a single target-output pair
-"""
-def criterion(output, target):
-    total_loss = 0.0
-    num_grids = output.size()
-    #TODO: Reduce this to a single for-loop using np.meshgrid
-    for grid_x in range(num_grids[0]):
-        for grid_y in range(num_grids[1]):
-            truth_bbox = target[grid_x, grid_y]
-            pred_bboxs = output[grid_x, grid_y].cpu()
-            
-            # Find the intersection over unio between the two predicted bounding boxes at the grid location
-            bbox_1, bbox_2 = pred_bboxs[0:5], pred_bboxs[5:10]
-            _bbox_1 = convert_YOLO_to_center_coords(bbox_1[1:], grid_x, grid_y, _STRIDE_)
-            _bbox_2 = convert_YOLO_to_center_coords(bbox_2[1:], grid_x, grid_y, _STRIDE_)
-            _truth_bbox = convert_YOLO_to_center_coords(truth_bbox[1:5], grid_x, grid_y, _STRIDE_) 
-            
-            class_probs = pred_bboxs[10:]
-            truth_probs = truth_bbox[5:]
-
-            if truth_bbox.sum() > 0: #there is an object in this class
-                max_bbox, min_bbox = (bbox_1, bbox_2) if iou(_bbox_1,_truth_bbox) > iou(_bbox_2, _truth_bbox) else (bbox_2, bbox_1)
-                confidence = max(iou(_bbox_1, _truth_bbox),iou(_bbox_2, _truth_bbox))
-                truth_bbox[0] = confidence #the ground truth data uses confidence 
-                Q = torch.eye(5) * 5
-                Q[0,0] = 1
-                z = max_bbox - truth_bbox[0:5]
-                #loss is weighted bounding box regression + weighted no object + class probabilities
-                loss_gx_gy = (z.t().matmul(Q).matmul(z)) + (0.5 * min_bbox[0]) + (truth_probs - class_probs).t().matmul(truth_probs - class_probs)                            
-            else:
-                #0.5 is the weight when there is no object
-                #0.5 is multiplied by the class confidences for each bounding box in the current grid
-                loss_gx_gy = 0.5 * ((bbox_1[0]*bbox_1[0]) + (bbox_2[0]*bbox_2[0])) 
-            
-            total_loss += loss_gx_gy
-    return total_loss
 
 
 _GRID_SIZE_ = 7
@@ -167,16 +129,26 @@ if __name__ == "__main__":
                     target_detections = convert_center_coords_to_YOLO(detections[batch_idx], _GRID_SIZE_)
                     target_tensor = gnd_truth_tensor(target_detections)                
 
-                    loss = criterion(pred_detections, target_tensor)
+                    loss = criterion(pred_detections, target_tensor, _STRIDE_)
+                    
+
+                    # extra = torch.rand(7,7,5)
+                    # extra[:,:,0] = 0
+                    # # output_tensor = torch.cat((extra,target_tensor),2)
+                    # output_tensor = torch.rand(7,7,25)              
+                    # output_tensor.requires_grad = True
+                    # loss = criterion(pred_detections, output_tensor, _STRIDE_)                    
+                    
+
                     batch_loss += loss
                     
-                iteration_loss = batch_loss / num_batch
+                iteration_loss = batch_loss / num_batch                
                 epoch_loss += iteration_loss.item()
                 if True: #TODO: Remove #idx % 1000 == 0:
                     print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
                 
-                    m_arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
-                    Source(m_arch).render("./model_arch")
+                    # m_arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
+                    # Source(m_arch).render("./model_arch")
 
                 iteration_loss.backward()
                 optimiser.step()
