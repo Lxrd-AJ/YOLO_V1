@@ -27,19 +27,19 @@ class Yolo_V1(nn.Module):
 
         # self.final_conv = nn.Conv2d(extract_out, 256, 3, 1, 1)
         self.final_conv = nn.Sequential(
-            nn.Conv2d(2048, 1024, 3, 1, 1), #2048 is the number of output filters from the last resnet bottleneck
+            nn.Conv2d(2048, 2048, 3, 1, 1), #2048 is the number of output filters from the last resnet bottleneck
             # nn.BatchNorm2d(1024),
             nn.LeakyReLU(0.1, inplace=True),
 
-            nn.Conv2d(1024, 512, 3, 1, 1), 
+            nn.Conv2d(2048, 1024, 3, 1, 1), 
             # nn.BatchNorm2d(512),
             nn.LeakyReLU(0.1, inplace=True),
 
-            nn.Conv2d(512, 512, 3, 1, 1), 
+            nn.Conv2d(1024, 1024, 3, 1, 1), 
             # nn.BatchNorm2d(512),
             nn.LeakyReLU(0.1, inplace=True),
 
-            nn.Conv2d(512, 256, 3, 1, 0),
+            nn.Conv2d(1024, 512, 3, 1, 0),
             # nn.BatchNorm2d(256),
             nn.LeakyReLU(0.1, inplace=True),
 
@@ -54,10 +54,11 @@ class Yolo_V1(nn.Module):
         input to our 1st linear layer would be `256`, the output channels of `final_conv`
         """
         self.linear_layers = nn.Sequential(
-            nn.Linear(256,512,True),
+            nn.Linear(512,1024,True),
             nn.Dropout(),
             nn.LeakyReLU(0.1, inplace=True),
-            nn.Linear(512, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes))
+            nn.Linear(1024, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
+            nn.Sigmoid()
         )
         
 
@@ -74,7 +75,7 @@ class Yolo_V1(nn.Module):
         lin_inp = torch.flatten(actv)
         lin_inp = lin_inp.view(x.size()[0],-1) #resize it so that it is flattened by batch        
         lin_out = self.linear_layers(lin_inp)
-        lin_out = torch.sigmoid(lin_out)            
+        # lin_out = torch.sigmoid(lin_out) #TODO: Move this to where the layers are constructed         
         det_tensor = lin_out.view(-1,((self.num_bbox * 5) + self.num_classes),self.grid,self.grid)
         return det_tensor
 

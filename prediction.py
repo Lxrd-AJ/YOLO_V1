@@ -7,7 +7,7 @@ from torch.autograd import Variable
 from models.utilities import *
 from PIL import Image, ImageOps
 from models.yolo_v1 import Yolo_V1
-
+#DEPRECATED! USE INFERENCE.PY INSTEAD
 if __name__ == "__main__":
     imagenet_config = "./models/extraction_imagenet.cfg"
     blocks = parse_config(imagenet_config)

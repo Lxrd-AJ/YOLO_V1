@@ -86,7 +86,8 @@ if __name__ == "__main__":
             bboxes = torch.cat((bboxes, class_idx.unsqueeze(1).float()), 1)
 
             #confidence threshold the bounding boxes by their class confidence scores            
-            bboxes = confidence_threshold(bboxes, 0.5)
+            print(bboxes)
+            bboxes = confidence_threshold(bboxes, 0.1)
             print(f"Len {bboxes.size(0)} b4 NMS")
             bboxes = nms(bboxes, 0.1)
             print(f"Len {len(bboxes)} after NMS")

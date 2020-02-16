@@ -9,6 +9,8 @@ import time
 import ctypes
 import os
 import random
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from PIL import Image
 from pprint import pprint
 from collections import OrderedDict
@@ -21,6 +23,13 @@ from loss import criterion
 
 
 
+def batch_collate_fn(batch):    
+    images = [item[0].unsqueeze(0) for item in batch]
+    detections = [item[1] for item in batch]  
+    images = torch.cat(images,0)
+    return (images, detections)
+
+
 def evaluate(model, dataloader):
     model.eval()
     eval_loss = 0.0
@@ -30,13 +39,13 @@ def evaluate(model, dataloader):
             X = X.to(_DEVICE_)
             res = model(X)
             batch_loss = 0.0
-            for batch_idx in range(Y.size(0)):
-                pred_detections = res[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
+            for batch_idx in range(X.size(0)):
+                pred_detections = res[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30 for use in `criterion`               
                 target_detections = convert_center_coords_to_YOLO(Y[batch_idx], _GRID_SIZE_)
                 target_tensor = gnd_truth_tensor(target_detections)
                 loss = criterion(pred_detections, target_tensor, _STRIDE_)
                 batch_loss += loss
-            batch_loss = batch_loss / Y.size(0)
+            batch_loss = batch_loss / X.size(0)
             eval_loss += batch_loss
     eval_loss = eval_loss / len(dataloader)
     return eval_loss
@@ -45,10 +54,10 @@ def evaluate(model, dataloader):
 
 _GRID_SIZE_ = 7
 _IMAGE_SIZE_ = (448,448)
-_BATCH_SIZE_ = 1
+_BATCH_SIZE_ = 8
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 15#150
+_NUM_EPOCHS_ = 25#150 #Maybe try using len(dataset) / 10
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
@@ -60,7 +69,7 @@ transform = transforms.Compose([
 
 dataset = { x: VOCDataset(f"./data/{x}.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_, transform=transform)
             for x in ['train','test','val']}
-dataloader = {x: utils.data.DataLoader(dataset[x], batch_size=_BATCH_SIZE_, shuffle=True, num_workers=4)
+dataloader = {x: utils.data.DataLoader(dataset[x], batch_size=_BATCH_SIZE_, shuffle=True, num_workers=4, collate_fn=batch_collate_fn)
                 for x in ['train','test','val']}
 
 for x in ['train','test','val']:
@@ -83,18 +92,20 @@ if __name__ == "__main__":
             ], lr=1e-1, momentum=0.9)
     
     #The learning rate scheduler will be added later post model debugging
-    # exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=50, gamma=0.1) #for transfer learning
+    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=5, gamma=0.1) #for transfer learning
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(_DEVICE_)
 
     # Save the model before training starts
-    torch.save(model.state_dict(), "./yolo_v1_model.pth")
+    # torch.save(model.state_dict(), "./yolo_v1_model.pth")
 
     train_since = time.time()
+    avg_train_loss = []
+    avg_test_loss = []
     for epoch in range(_NUM_EPOCHS_):
-        print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}")
+        print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}\t Learning Rate = {exp_lr_scheduler.get_lr()}")
         print("-----" * 15)
         epoch_loss = 0.0
         epoch_since = time.time()
@@ -120,7 +131,7 @@ if __name__ == "__main__":
 
             batch_loss = 0.0
             iteration_loss = 0.0
-            num_batch = detections.size(0)
+            num_batch = len(detections)
 
             with torch.set_grad_enabled(True):
                 # Having 3 foor-loops might be slow, this could be improved later as premature optimisation is the root of all evils
@@ -131,21 +142,12 @@ if __name__ == "__main__":
 
                     loss = criterion(pred_detections, target_tensor, _STRIDE_)
                     
-
-                    # extra = torch.rand(7,7,5)
-                    # extra[:,:,0] = 0
-                    # # output_tensor = torch.cat((extra,target_tensor),2)
-                    # output_tensor = torch.rand(7,7,25)              
-                    # output_tensor.requires_grad = True
-                    # loss = criterion(pred_detections, output_tensor, _STRIDE_)                    
+                    batch_loss += loss                    
                     
-
-                    batch_loss += loss
-                    
-                iteration_loss = batch_loss / num_batch                
+                iteration_loss = batch_loss / num_batch            
                 epoch_loss += iteration_loss.item()
                 if True: #TODO: Remove #idx % 1000 == 0:
-                    print(f"\tIteration {idx+1}/{len(dataloader['train'])//_BATCH_SIZE_}: Loss = {iteration_loss.item()}")
+                    print(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {iteration_loss.item()}")
                 
                     # m_arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
                     # Source(m_arch).render("./model_arch")
@@ -156,22 +158,43 @@ if __name__ == "__main__":
         epoch_loss = epoch_loss / len(dataloader['train'])
         epoch_elapsed = time.time() - epoch_since
         print(f"\tAverage Train Epoch loss is {epoch_loss:.2f} [{epoch_elapsed//60:.0f}m {epoch_elapsed%60:.0f}s]")
+        avg_train_loss.append(epoch_loss)
 
-        # exp_lr_scheduler.step()
+        exp_lr_scheduler.step()
 
         #evaluate on the test dataset
         test_loss = evaluate(model, dataloader['test'])
+        avg_test_loss.append(test_loss)
         print(f"\tAverage Test Loss is {test_loss:.2f}")
 
         # Save the model parameters https://pytorch.org/tutorials/beginner/saving_loading_models.html
-        if epoch % 10 == 0:
+        if True: #TODO: Remove after debugging #epoch % 10 == 0:
             torch.save(model.state_dict(), "./yolo_v1_model.pth")
             torch.save(optimiser.state_dict(), "./optimiser_yolo.pth")
+
+        #Make some plots baby! 
+        plt.plot(avg_train_loss,'r',label='Train',marker='o')
+        plt.plot(avg_test_loss,'b',label='Test',marker='o')
+        plt.xticks(np.arange(0,_NUM_EPOCHS_))
+        
+        plt.title(f"Train & Test loss using {len(dataset['train'])} images")
+        plt.grid(True)
+        plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
+    
+    plt.legend()
+    plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
 
     #Evaluate on the validation dataset
     val_loss = evaluate(model, dataloader['val'])
     train_elapsed = time.time() - train_since
     print(f"Validation loss is {val_loss:.2f}")
     print(f"Total training time is [{train_elapsed//60:.0f}m {train_elapsed%60:.0f}s]")
+
     
 
+
+
+"""
+- Try adding batch norm and setting bias to false (conv2d)
+- investigate why the model is giving 0 confidence to the detections
+"""
