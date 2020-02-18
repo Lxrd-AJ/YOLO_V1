@@ -55,6 +55,7 @@ if __name__ == "__main__":
         X_ = transform(X).unsqueeze(0)
         predictions = model(X_)
         sz = predictions.size()    
+        #TODO - [ ]: The model definition has changed, ensure this is correct
         predictions = predictions.view(sz[0], sz[1], -1) # change from 1x30x7x7 to 1x30x49
         predictions = predictions.transpose(1,2).contiguous() #change from 1x30x49 to 1x49x30
         

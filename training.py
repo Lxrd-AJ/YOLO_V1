@@ -15,7 +15,7 @@ from PIL import Image
 from pprint import pprint
 from collections import OrderedDict
 from data.voc_dataset import VOCDataset
-from utilities import draw_detection, parse_config, build_class_names, iou, convert_YOLO_to_center_coords, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL, draw_detections
+from utilities import draw_detection, parse_config, build_class_names, iou, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL, draw_detections
 from yolo_v1 import Yolo_V1
 from torchviz import make_dot
 from graphviz import Source
@@ -136,7 +136,7 @@ if __name__ == "__main__":
             with torch.set_grad_enabled(True):
                 # Having 3 foor-loops might be slow, this could be improved later as premature optimisation is the root of all evils
                 for batch_idx in range(num_batch):
-                    pred_detections = predictions[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
+                    pred_detections = predictions[batch_idx]#.transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
                     target_detections = convert_center_coords_to_YOLO(detections[batch_idx], _GRID_SIZE_)
                     target_tensor = gnd_truth_tensor(target_detections)                
 

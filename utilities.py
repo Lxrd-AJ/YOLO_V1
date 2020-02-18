@@ -81,7 +81,7 @@ There are two methods of approaching it
     encode the normalised center x in terms of the grid cells by using floor(7 * center_x) => g_x
     the offset from the grid cell is then given by (7 * center_x) - g_x
 """
-def convert_center_coords_to_YOLO(detections, grid_size=7):
+def convert_center_coords_to_YOLO(detections, grid_size=7):    
     res = []    
     for idx, detection in enumerate(detections):        
         bbox = detection[1:]
@@ -93,11 +93,12 @@ def convert_center_coords_to_YOLO(detections, grid_size=7):
         bbox[2] = math.sqrt(bbox[2])
         bbox[3] = math.sqrt(bbox[3])
         
-        # Adding the grid cell locations gx, gy to the detection to make loss calculations easier
+        # Adding the grid cell locations gx, gy to the detection for use in `gnd_truth_tensor` function
         grid_cells = torch.Tensor([gx,gy])
         detection[1:] = bbox
-        res.append(torch.cat([detection, grid_cells]).unsqueeze(0))    
-    return torch.cat(res, dim=0) #detections
+        res.append(torch.cat([detection, grid_cells]).unsqueeze(0))
+    res = torch.cat(res, dim=0)
+    return res #detections
 
 
 """

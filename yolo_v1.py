@@ -76,7 +76,7 @@ class Yolo_V1(nn.Module):
         lin_inp = lin_inp.view(x.size()[0],-1) #resize it so that it is flattened by batch        
         lin_out = self.linear_layers(lin_inp)
         # lin_out = torch.sigmoid(lin_out) #TODO: Move this to where the layers are constructed         
-        det_tensor = lin_out.view(-1,((self.num_bbox * 5) + self.num_classes),self.grid,self.grid)
+        det_tensor = lin_out.view(-1,self.grid,self.grid,((self.num_bbox * 5) + self.num_classes))
         return det_tensor
 
     """
