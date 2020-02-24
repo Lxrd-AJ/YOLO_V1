@@ -1,34 +1,143 @@
-from utilities import convert_YOLO_to_center_coords, iou, im2PIL, draw_detections, build_class_names
+from utilities import convert_YOLO_to_center_coords, iou, _iou, im2PIL, draw_detections, build_class_names
 import torch
 import torch.nn as nn
 import torch.nn.functional as F 
+import numpy as np
 
 
-def box(output, target):
+
+def normalised_to_global(A, width=448, height=448):
     """
-    Receives an output prediction of size S*S*(B*5+C) 
-    and `target` ground truth of size S*S*5 and returns the bounding box to use
+    Converts a bounding box in the center normalised coordinates to the center global 
+    coordinates.
+    A is in the format N*5 where N is the number of bounding boxes and each bounding
+    box is in the format <x> <y> <w> <h> <class>
+
+    - returns   A in the same size as input
+    """
+    A[:,0] = A[:,0] * width
+    A[:,1] = A[:,1] * height
+    A[:,2] = A[:,2] * width
+    A[:,3] = A[:,3] * height 
+    return A
+
+def cell_to_global(A, im_size=448, stride=64, B=2, S=7):
+    """
+    Receives a tensor in the format N*(B*5) that represents each cell's bounding box 
+    prediction where each cell is in the format <x> <y> <w> <h> <conf> encoded 
+    in the YOLO format where it normalised relative to the grid cell and N is the
+    total number of grids i.e S*S and B is the number of bounding boxes
+    It returns the grid cell coordinates with respect to the global image.
+
+    - return B:     Tensor of size N*(B*5), same size as input where the <x> <y> 
+                    <w> <h> <conf> in each cell is wrt to the global image. This is
+                    still in the center normalised coordinate.
+    """
+    
+    rng = np.arange(S) # the range of possible grid coords
+    cols, rows = np.meshgrid(rng, rng)
+    
+    #create a grid with each cell containing the (x,y) location multiplied by stride  
+    rows = torch.FloatTensor(rows).view(-1,1)
+    cols = torch.FloatTensor(cols).view(-1,1)
+    grid = torch.cat((rows,cols),1) * stride
+    
+    bboxes = torch.split(A, A.size(1)//B, 1) #split the N*10 bboxes into two N*5 sets
+
+    res = []
+    for v in bboxes: # v would be of size N*5
+        #convert the <x> <y> and <w> <h> cell coordinates to global image coordinates
+        v[:,:2] = (v[:,:2] * stride).round() + grid
+        v[:,2:4] = (v[:,2:4].pow(2) * im_size).round()        
+        res.append(v)
+    res = torch.cat(res,1)    
+    return res
+
+
+def box(output, target, size=448, B=2):
+    """
+    Returns the box to use for loss calculation. This is either the box with the 
+    highest confidence or the box with the highest intersection over union
+    with the target
+    Receives an output prediction of size S*S*(B*5+C) where each cell is in
+    the format <x> <y> <w> <h> <conf> | <x> <y> <w> <h> <conf> | <cls.......probs>
+    assuming number of bounding boxes is 2
+    and `target` ground truth of size S*S*5 where target is in the format
+        <x> <y> <w> <h> <cls>
+    and returns the bounding box to use
     for each grid cell.
 
     - return bbox:  Tensor of size SxSx(5+C) where each bounding box is in 
-                    the format <x> <y> <w> <h> <confidence>
+                    the format <x> <y> <w> <h> <confidence> <cls probs>
+                    The coordinate, width and height are in global image coordinates
     """
-    #TODO: Continue here `similar to predict_one_box`
-    pass
+    
+    #Reshape the output tensor into (S*S)*(B*5+C) to make it easier to work with
+    sz = output.size()
+    output = output.view(sz[0] * sz[1], -1) #e.g 49*30
+    pred_bboxes = output[:,:B*5] #slice out only the bounding boxes e.g 49*10
+    pred_classes = output[:,B*5:] #slice out the pred classes  e.g 49x10
+    target = target.view(sz[0] * sz[1], -1) #e.g 49*5
 
-"""
-- Does not support batching, it operates on a single target-output pair
-"""
-def criterion(output, target, stride):
+    pred_bboxes = cell_to_global(pred_bboxes) #e.g 49*10
+    target = normalised_to_global(target) #e.g 49*5
+
+    num_classes = output.size(1) - (B*5)
+    print(f"Pred classes size {pred_classes.size()}")
+    print(f"Num classes = {num_classes}")
+    R = torch.zeros(output.size(0),5+num_classes) #result to return    
+    for i in range(output.size(0)): #loop over each cell coordinate
+        # `bboxes` will be a tuple of size B (e.g 2), where each elem is 1*5
+        bboxes = torch.split(pred_bboxes[i,:], pred_bboxes.size(1)//B)        
+        bboxes = torch.stack(bboxes)        
+
+        """
+        In the case where there is a ground truth tensor at the current grid cell,
+        the predicted bounding box with the highest intersection over union to the
+        ground truth is chosen.
+        If there is no ground truth prediction at the current cell, just pick the
+        bounding box with the highest confidence
+        """
+
+        #case 1: There is a ground truth prediction at this cell i
+        if target[i].sum() > 0:#select the box with the highest intersection over union
+            repeated_target = target[i].repeat(bboxes.size(0),1).detach()
+            jac_idx = _iou(bboxes.clone().detach(), repeated_target)
+            
+            max_iou_idx = torch.argmax(jac_idx)
+            R[i,:5] = bboxes[max_iou_idx,:]
+        else: #select the box with the highest confidence
+            highest_conf_idx = torch.argmax(bboxes[:,4])
+            R[i,:5] = bboxes[highest_conf_idx,:]
+
+        #Add the predicted class confidence to the results
+        R[i,5:] = pred_classes[i]
+        
+    return R.view(sz[0], sz[1], -1)
+
+
+def criterion(output, target): #, stride
     """
     Computes the loss (YOLO) between the output and the target tensor
     - It assumes the both the output and target are encoded in the YOLO format
         where <x> and <y> are normalised to the grid cell
         and <w> and <h> is the square root of the width of the object / width of image
-    - The output is of size NxSxSx(Bx5+C) where B is the no. of bounding boxes
-    - The target is of size NxSxSx5 in format <x> <y> <w> <h> <class>
+    - The output is of size NxSxSx(Bx5+C) where B is the no. of bounding boxes encoded 
+        in the YOLO format
+    - The target is of size NxSxSx5 in format <x> <y> <w> <h> <class> not encoded in 
+        the YOLO format but normalised wrt the image
     #TODO: Finish refactoring loss function
     """
+
+    for idx, out_tensor in enumerate(output):
+        best_boxes = box(out_tensor, target[idx]) #e.g 7x7x(5+20)
+        print(best_boxes)
+        print(best_boxes.size())
+        exit(0)
+
+
+    exit(0)
+
     total_loss = 0.0
     num_grids = output.size()
     #TODO: Reduce this to a single for-loop using np.meshgrid
@@ -114,9 +223,20 @@ if __name__ == "__main__":
     optimiser = torch.optim.Adam(net.parameters(), lr=0.001)
 
     X = torch.randn(2, 3, 448, 448)    
+
+    """
+    Ground truth prediction format
+    - It is not in global image coordinates
+    - It is in the center normalised form where x,y,w,h have been divided by the image
+        width and height (not encoded in the YOLO format)
+    """
     Y = torch.rand(2,7,7,5)
-    Y[:,:,:,:4] = torch.clamp(Y[:,:,:,:4], 0,1)
+    Y[:,:,:,:4] = torch.clamp(Y[:,:,:,:4], 0,1) #This is not encoded in the YOLO format
     Y[:,:,:,4] = (Y[:,:,:,4] * 20).floor()
+    #zero out some cells to represent no ground truth data at those locations
+    mask = torch.empty(7,7).uniform_(0,1)
+    mask = torch.bernoulli(mask).bool()
+    Y[:,mask,:] = 0
     
 
     for i in range(25):

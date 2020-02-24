@@ -122,6 +122,7 @@ def convert_YOLO_to_center_coords(bbox, grid_x, grid_y, stride, grid_size=7):
 """
 uses the detections in the YOLO format to construct the a tensor in the grid coordinates e.g 7x7x30 to make it easier for loss calculations.
 Used only on the ground truth detection matrices
+#TODO: Rewrite this function
 """
 def gnd_truth_tensor(detections, grid_size=7, num_classes=20):    
     x = torch.zeros([grid_size, grid_size, num_classes+5], dtype=torch.float32)
@@ -238,7 +239,8 @@ def iou(a,b):
 
 
 """
-Vectorised form of the intersection over union aka Jacquard index
+Vectorised form of the intersection over union aka Jacquard index.
+Expects the bounding boxes in the center normalised coordinates.
 """
 def _iou(a,b):    
     a_x_min, a_y_min = a[:,1], a[:,2]
