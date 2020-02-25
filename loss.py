@@ -83,8 +83,7 @@ def box(output, target, size=448, B=2):
     target = normalised_to_global(target) #e.g 49*5
 
     num_classes = output.size(1) - (B*5)
-    print(f"Pred classes size {pred_classes.size()}")
-    print(f"Num classes = {num_classes}")
+    
     R = torch.zeros(output.size(0),5+num_classes) #result to return    
     for i in range(output.size(0)): #loop over each cell coordinate
         # `bboxes` will be a tuple of size B (e.g 2), where each elem is 1*5
@@ -116,9 +115,9 @@ def box(output, target, size=448, B=2):
     return R.view(sz[0], sz[1], -1)
 
 
-def criterion(output, target): #, stride
+def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
     """
-    Computes the loss (YOLO) between the output and the target tensor
+    Computes the average loss (YOLO) between the output and the target batch tensor
     - It assumes the both the output and target are encoded in the YOLO format
         where <x> and <y> are normalised to the grid cell
         and <w> and <h> is the square root of the width of the object / width of image
@@ -126,15 +125,37 @@ def criterion(output, target): #, stride
         in the YOLO format
     - The target is of size NxSxSx5 in format <x> <y> <w> <h> <class> not encoded in 
         the YOLO format but normalised wrt the image
-    #TODO: Finish refactoring loss function
     """
 
+    batch_loss = torch.tensor(0).float()
     for idx, out_tensor in enumerate(output):
         best_boxes = box(out_tensor, target[idx]) #e.g 7x7x(5+20)
-        print(best_boxes)
-        print(best_boxes.size())
-        exit(0)
+        sz = best_boxes.size()
+        P = best_boxes.view(sz[0] * sz[1], -1) #e.g 49x25
+        G = target[idx].view(sz[0] * sz[1], -1) #e.g 49x5
 
+        image_loss = torch.tensor(0).float()
+
+        for i in range(P.size(0)): #loop over each cell coordinate
+            if G[i].sum() > 0: #there is a ground truth prediction at this cell
+                pred_cls = P[i,5:]
+                true_cls = torch.zeros(pred_cls.size())
+                true_cls[int(G[i,4])] = 1                
+
+                # grid cell regression loss
+                grid_loss = lambda_coord * torch.pow(P[i,0:2] - G[i,0:2], 2).sum() \
+                    + lambda_coord * torch.pow(torch.sqrt(P[i,2:4]) - torch.sqrt(G[i,2:4]),2).sum() \
+                    + torch.pow(P[i,4] - 1,2) \
+                    + torch.pow(pred_cls - true_cls, 2).sum() # class probability loss
+            else:
+                grid_loss = lambda_noobj * torch.pow(P[i,4] - 0,2) #confidence should be zero
+            
+            image_loss += grid_loss
+        print(f"Image {i}th loss = {image_loss}")
+        batch_loss += image_loss
+
+    print(f"Batch loss = {batch_loss}")
+    print(f"Avg batch loss = {batch_loss/output.size(0)}")
 
     exit(0)
 
