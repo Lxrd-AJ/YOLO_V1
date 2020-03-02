@@ -21,7 +21,7 @@ _GRID_SIZE_ = 7
 _STRIDE_ = _IMAGE_SIZE_[0] / _GRID_SIZE_
 class_names = build_class_names("./voc.names")
 
-dataset = VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_) #TODO: Chane back to validation
+dataset = VOCDataset(f"./data/val.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_)
 
 class_color_mapping = {
     0: "red", 1: "blue", 2: "AntiqueWhite", 3: "Aquamarine", 4: "Black",
@@ -55,7 +55,6 @@ if __name__ == "__main__":
         X_ = transform(X).unsqueeze(0)
         predictions = model(X_)
         sz = predictions.size()    
-        #TODO - [ ]: The model definition has changed, ensure this is correct
         
         predictions = predictions.view(sz[0], sz[1] * sz[2], -1) # change from 1x7x7x30 to 1x49x30        
         # predictions = predictions.transpose(1,2).contiguous() #change from 1x30x49 to 1x49x30
@@ -90,8 +89,9 @@ if __name__ == "__main__":
 
             #confidence threshold the bounding boxes by their class confidence scores            
             
-            bboxes = confidence_threshold(bboxes, 0.6)
-            print(f"Len {bboxes.size(0)} b4 NMS")
+            print(bboxes.size())
+            bboxes = confidence_threshold(bboxes, 0.3)
+            # print(f"Len {bboxes.size(0)} b4 NMS")
             # bboxes = bboxes.unsqueeze(0)
             
             # bboxes = nms(bboxes, 0.1)

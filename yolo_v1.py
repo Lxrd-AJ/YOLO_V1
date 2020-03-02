@@ -30,7 +30,9 @@ class Yolo_V1(nn.Module):
             nn.BatchNorm2d(1024),
             nn.LeakyReLU(0.1, inplace=True),
 
-            # nn.Conv2d(2048, 1024, 3, 1, 1, bias=False), 
+            #NB: To add more conv layers, the batch size must be increased from 8 to higher
+            
+            # nn.Conv2d(1024, 1024, 1, 1, 0, bias=False), 
             # nn.BatchNorm2d(1024),
             # nn.LeakyReLU(0.1, inplace=True),
 
@@ -57,7 +59,7 @@ class Yolo_V1(nn.Module):
         input to our 1st linear layer would be `256`, the output channels of `final_conv`
         """
         self.linear_layers = nn.Sequential(
-            # nn.Linear(512,1024,True),
+            # nn.Linear(1024,1024,True),
             # nn.Dropout(),
             # nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(1024, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),

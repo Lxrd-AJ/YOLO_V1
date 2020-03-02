@@ -67,7 +67,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 8
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 30 #Maybe try using len(dataset) / 10
+_NUM_EPOCHS_ = 150
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
@@ -103,21 +103,19 @@ if __name__ == "__main__":
                 {'params': model.linear_layers.parameters()}
             ], lr=1e-1, momentum=0.9)
     
-    #The learning rate scheduler will be added later post model debugging
-    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.1) #for transfer learning
+    # exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=15, gamma=0.1) #for transfer learning
+    exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser)
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(_DEVICE_)
 
-    # Save the model before training starts
-    # torch.save(model.state_dict(), "./yolo_v1_model.pth")
-
     train_since = time.time()
     avg_train_loss = []
     avg_test_loss = []
     for epoch in range(_NUM_EPOCHS_):
-        print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}\t Learning Rate = {exp_lr_scheduler.get_lr()}")
+        lr = [group['lr'] for group in optimiser.param_groups]
+        print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}\t Learning Rate = {lr}")
         print("-----" * 15)
         epoch_loss = 0.0
         epoch_since = time.time()
@@ -135,7 +133,7 @@ if __name__ == "__main__":
                 batch_loss = criterion(predictions, detections)                
                 epoch_loss += batch_loss.item()
                 
-                if True: #TODO: Remove #idx % 1000 == 0:
+                if idx % 500 == 0:
                     print(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {batch_loss.item()}")
                 
                     # m_arch = make_dot(batch_loss, params=dict(model.named_parameters()))
@@ -149,12 +147,13 @@ if __name__ == "__main__":
         print(f"\tAverage Train Epoch loss is {epoch_loss:.2f} [{epoch_elapsed//60:.0f}m {epoch_elapsed%60:.0f}s]")
         avg_train_loss.append(epoch_loss)
         
-        exp_lr_scheduler.step()
 
         #evaluate on the test dataset
         test_loss = evaluate(model, dataloader['test'])
         avg_test_loss.append(test_loss)
         print(f"\tAverage Test Loss is {test_loss:.2f}")
+
+        exp_lr_scheduler.step(test_loss)
 
         # Save the model parameters https://pytorch.org/tutorials/beginner/saving_loading_models.html
         if epoch % 10 == 0:
@@ -164,7 +163,7 @@ if __name__ == "__main__":
         #Make some plots baby! 
         plt.plot(avg_train_loss,'r',label='Train',marker='o')
         plt.plot(avg_test_loss,'b',label='Test',marker='x')
-        plt.xticks(np.arange(0,_NUM_EPOCHS_,5))
+        plt.xticks(np.arange(0,_NUM_EPOCHS_,10))
         
         plt.title(f"Train & Test loss using {len(dataset['train'])} images")
         plt.grid(True)
@@ -178,12 +177,3 @@ if __name__ == "__main__":
     train_elapsed = time.time() - train_since
     print(f"Validation loss is {val_loss:.2f}")
     print(f"Total training time is [{train_elapsed//60:.0f}m {train_elapsed%60:.0f}s]")
-
-    
-
-
-
-"""
-- Try adding batch norm and setting bias to false (conv2d)
-- investigate why the model is giving 0 confidence to the detections
-"""
