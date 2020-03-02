@@ -64,7 +64,7 @@ def evaluate(model, dataloader):
 
 _GRID_SIZE_ = 7
 _IMAGE_SIZE_ = (448,448)
-_BATCH_SIZE_ = 8
+_BATCH_SIZE_ = 16
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _NUM_EPOCHS_ = 150

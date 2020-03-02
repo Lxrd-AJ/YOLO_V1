@@ -146,7 +146,6 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
                 true_cls[int(G[i,4])] = 1                
 
                 # grid cell regression loss
-                #TODO: As YOLO predicts the sqrt width & height, do i still need to find the sqrt here when calculating loss??
                 grid_loss = lambda_coord * torch.pow(P[i,0:2] - G[i,0:2], 2).sum() \
                     + lambda_coord * torch.pow(torch.sqrt(P[i,2:4]) - torch.sqrt(G[i,2:4]),2).sum() \
                     + torch.pow(P[i,4] - 1,2) \
@@ -154,7 +153,7 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
             else:
                 grid_loss = lambda_noobj * torch.pow(P[i,4] - 0,2) #confidence should be zero
             
-            image_loss += (grid_loss)# / P.size(0)) #mean part of mean-squared error
+            image_loss += (grid_loss)
         
         batch_loss += image_loss
 
