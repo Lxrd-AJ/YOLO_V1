@@ -21,7 +21,7 @@ _GRID_SIZE_ = 7
 _STRIDE_ = _IMAGE_SIZE_[0] / _GRID_SIZE_
 class_names = build_class_names("./voc.names")
 
-dataset = VOCDataset(f"./data/val.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_)
+dataset = VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_) #TODO: Chane back to validation
 
 class_color_mapping = {
     0: "red", 1: "blue", 2: "AntiqueWhite", 3: "Aquamarine", 4: "Black",
@@ -56,8 +56,9 @@ if __name__ == "__main__":
         predictions = model(X_)
         sz = predictions.size()    
         #TODO - [ ]: The model definition has changed, ensure this is correct
-        predictions = predictions.view(sz[0], sz[1], -1) # change from 1x30x7x7 to 1x30x49
-        predictions = predictions.transpose(1,2).contiguous() #change from 1x30x49 to 1x49x30
+        
+        predictions = predictions.view(sz[0], sz[1] * sz[2], -1) # change from 1x7x7x30 to 1x49x30        
+        # predictions = predictions.transpose(1,2).contiguous() #change from 1x30x49 to 1x49x30
         
         detection_results = {}
         for batch_idx in range(sz[0]): #Operate over the predictions in a batch
@@ -72,10 +73,11 @@ if __name__ == "__main__":
             cols = torch.FloatTensor(cols).view(-1,1)
             grid = torch.cat((rows,cols),1) * _STRIDE_
             #convert the boxes to center coordinates (NOT NORMALISED BY THE IMAGE WIDTH)
-            bboxes[:,1:3] = (bboxes[:,1:3] * _STRIDE_).round() + grid #1st box's center x,y
-            bboxes[:,3:5] = (bboxes[:,3:5].pow(2) * _IMAGE_SIZE_[0]).round() #1st box's w & h
-            bboxes[:,6:8] = (bboxes[:,6:8] * _STRIDE_).round() + grid #2nd box's center x,y
-            bboxes[:,8:10] = (bboxes[:,8:10].pow(2) * _IMAGE_SIZE_[0]).round() #2nd box's w & h
+            
+            bboxes[:,0:2] = (bboxes[:,0:2] * _STRIDE_).round() + grid #1st box's center x,y
+            bboxes[:,2:4] = (bboxes[:,2:4] * _IMAGE_SIZE_[0]).round() #bboxes[:,2:4].pow(2)   1st box's w & h
+            bboxes[:,5:7] = (bboxes[:,5:7] * _STRIDE_).round() + grid #2nd box's center x,y
+            bboxes[:,7:9] = (bboxes[:,7:9] * _IMAGE_SIZE_[0]).round() #bboxes[:,7:9].pow(2)   2nd box's w & h
             
             bboxes = max_box(bboxes[:,:5], bboxes[:,5:])
             
@@ -87,21 +89,33 @@ if __name__ == "__main__":
             bboxes = torch.cat((bboxes, class_idx.unsqueeze(1).float()), 1)
 
             #confidence threshold the bounding boxes by their class confidence scores            
-            print(bboxes)
-            bboxes = confidence_threshold(bboxes, 0.1)
+            
+            bboxes = confidence_threshold(bboxes, 0.6)
             print(f"Len {bboxes.size(0)} b4 NMS")
-            bboxes = nms(bboxes, 0.1)
-            print(f"Len {len(bboxes)} after NMS")
+            # bboxes = bboxes.unsqueeze(0)
+            
+            # bboxes = nms(bboxes, 0.1)
+            # print(f"Len {len(bboxes)} after NMS")
 
             #TEST: Show the predictions
-            for bbox in bboxes:        
+            print(bboxes.size())
+            for bbox in bboxes:  
+                print(bbox)     
                 c = int(bbox[5])        
-                draw_detection(X__,bbox[1:5] / _IMAGE_SIZE_[0], class_names[c], class_color_mapping[c])
+                draw_detection(X__,bbox[:4] / _IMAGE_SIZE_[0], class_names[c], class_color_mapping[c])
             X__.show()
             # X.show()
         # print(predictions.size())
 
-
+        #+++++++++++++++++++++++++++++++++++
+        #Passing junk data
+        # images = torch.randn(2, 3, 448, 448)
+        # detections = torch.rand(_BATCH_SIZE_, 1, 5)
+        # detections[:,:,0] *= 20
+        
+        # x = im2PIL(images[0])            
+        # x = draw_detections(x, detections[0], class_names)            
+        #+++++++++++++++++++++++++++++++++++
 
 
 

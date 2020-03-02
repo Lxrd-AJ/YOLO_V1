@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F 
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 
@@ -48,7 +49,7 @@ def cell_to_global(A, im_size=448, stride=64, B=2, S=7):
     for v in bboxes: # v would be of size N*5
         #convert the <x> <y> and <w> <h> cell coordinates to global image coordinates
         v[:,:2] = (v[:,:2] * stride).round() + grid
-        v[:,2:4] = (v[:,2:4].pow(2) * im_size).round()        
+        v[:,2:4] = (torch.pow(v[:,2:4].clone().detach(),2) * im_size).round()
         res.append(v)
     res = torch.cat(res,1)    
     return res
@@ -79,8 +80,8 @@ def box(output, target, size=448, B=2):
     pred_classes = output[:,B*5:] #slice out the pred classes  e.g 49x10
     target = target.view(sz[0] * sz[1], -1) #e.g 49*5
 
-    pred_bboxes = cell_to_global(pred_bboxes) #e.g 49*10
-    target = normalised_to_global(target) #e.g 49*5
+    pred_bboxes_global = cell_to_global(pred_bboxes.clone().detach()) #e.g 49*10
+    target_global = normalised_to_global(target.clone().detach()) #e.g 49*5
 
     num_classes = output.size(1) - (B*5)
     
@@ -88,7 +89,9 @@ def box(output, target, size=448, B=2):
     for i in range(output.size(0)): #loop over each cell coordinate
         # `bboxes` will be a tuple of size B (e.g 2), where each elem is 1*5
         bboxes = torch.split(pred_bboxes[i,:], pred_bboxes.size(1)//B)        
-        bboxes = torch.stack(bboxes)        
+        bboxes = torch.stack(bboxes)
+        bboxes_global = torch.split(pred_bboxes_global[i,:], pred_bboxes.size(1)//B)
+        bboxes_global = torch.stack(bboxes_global)
 
         """
         In the case where there is a ground truth tensor at the current grid cell,
@@ -100,8 +103,8 @@ def box(output, target, size=448, B=2):
 
         #case 1: There is a ground truth prediction at this cell i
         if target[i].sum() > 0:#select the box with the highest intersection over union
-            repeated_target = target[i].repeat(bboxes.size(0),1).detach()
-            jac_idx = _iou(bboxes.clone().detach(), repeated_target)
+            repeated_target = target[i].clone().detach().repeat(bboxes.size(0),1)
+            jac_idx = _iou(bboxes_global, repeated_target)
             
             max_iou_idx = torch.argmax(jac_idx)
             R[i,:5] = bboxes[max_iou_idx,:]
@@ -143,6 +146,7 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
                 true_cls[int(G[i,4])] = 1                
 
                 # grid cell regression loss
+                #TODO: As YOLO predicts the sqrt width & height, do i still need to find the sqrt here when calculating loss??
                 grid_loss = lambda_coord * torch.pow(P[i,0:2] - G[i,0:2], 2).sum() \
                     + lambda_coord * torch.pow(torch.sqrt(P[i,2:4]) - torch.sqrt(G[i,2:4]),2).sum() \
                     + torch.pow(P[i,4] - 1,2) \
@@ -150,50 +154,13 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
             else:
                 grid_loss = lambda_noobj * torch.pow(P[i,4] - 0,2) #confidence should be zero
             
-            image_loss += grid_loss
-        print(f"Image {i}th loss = {image_loss}")
+            image_loss += (grid_loss)# / P.size(0)) #mean part of mean-squared error
+        
         batch_loss += image_loss
 
-    print(f"Batch loss = {batch_loss}")
-    print(f"Avg batch loss = {batch_loss/output.size(0)}")
+    avg_batch_loss = batch_loss/output.size(0)
 
-    exit(0)
-
-    total_loss = 0.0
-    num_grids = output.size()
-    #TODO: Reduce this to a single for-loop using np.meshgrid
-    for grid_x in range(num_grids[0]):
-        for grid_y in range(num_grids[1]):
-            truth_bbox = target[grid_x, grid_y]
-            pred_bboxs = output[grid_x, grid_y].cpu()
-            
-            # Find the intersection over unio between the two predicted bounding boxes at the grid location
-            bbox_1, bbox_2 = pred_bboxs[0:5], pred_bboxs[5:10]
-            _bbox_1 = convert_YOLO_to_center_coords(bbox_1[1:], grid_x, grid_y, stride)
-            _bbox_2 = convert_YOLO_to_center_coords(bbox_2[1:], grid_x, grid_y, stride)
-            _truth_bbox = convert_YOLO_to_center_coords(truth_bbox[1:5], grid_x, grid_y, stride) 
-            
-            class_probs = pred_bboxs[10:]
-            truth_probs = truth_bbox[5:]            
-
-            if truth_bbox.sum() > 0: #there is an object in this class
-                max_bbox, min_bbox = (bbox_1, bbox_2) if iou(_bbox_1,_truth_bbox) > iou(_bbox_2, _truth_bbox) else (bbox_2, bbox_1)
-                confidence = max(iou(_bbox_1, _truth_bbox),iou(_bbox_2, _truth_bbox))
-                truth_bbox[0] = confidence #the ground truth data uses confidence
-                Q = torch.eye(5) * 5
-                Q[0,0] = 1
-                z = max_bbox - truth_bbox[0:5]
-                #loss is weighted bounding box regression + weighted no object + class probabilities                
-                loss_gx_gy = (z.t().matmul(Q).matmul(z)) \
-                                + (0.5 * min_bbox[0]) \
-                                + (truth_probs - class_probs).t().matmul(truth_probs - class_probs)                
-            else:
-                #0.5 is the weight when there is no object
-                #0.5 is multiplied by the class confidences for each bounding box in the current grid
-                loss_gx_gy = 0.5 * ((bbox_1[0]*bbox_1[0]) + (bbox_2[0]*bbox_2[0])) 
-            
-            total_loss += loss_gx_gy
-    return total_loss
+    return avg_batch_loss
 
 
 class TestNet(nn.Module):
@@ -202,12 +169,16 @@ class TestNet(nn.Module):
 
         self.conv = nn.Sequential(
             nn.Conv2d(3, 64, 3, 1, 0),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, 3, 1, 0),
+            nn.Conv2d(64, 128, 3, 1, 0,bias=False),
+            nn.BatchNorm2d(128),
             nn.ReLU(inplace=True),
             nn.Conv2d(128, 256, 3, 1, 0),
+            nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.Conv2d(256, 512, 5, 1, 0 ),
+            nn.BatchNorm2d(512),
             nn.ReLU(inplace=True),
             nn.AdaptiveAvgPool2d((1,1))
         )
@@ -215,6 +186,7 @@ class TestNet(nn.Module):
         self.linear = nn.Sequential(
             nn.Linear(512, 1024, True),
             nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
             nn.Linear(1024, 1470),
             nn.Sigmoid()
         )
@@ -236,18 +208,21 @@ if __name__ == "__main__":
     # x = im2PIL(images[0])            
     # x = draw_detections(x, detections[0], class_names)
     # x.show()
+    torch.autograd.set_detect_anomaly(True)
+
     """
     This test assumes that I can build a simple model that can overfit to 
     a random batch of images over at least 20 epochs
     """
     net = TestNet()
-    optimiser = torch.optim.Adam(net.parameters(), lr=0.001)
+    optimiser = torch.optim.Adam(net.parameters(), lr=1e-5)
 
     X = torch.randn(2, 3, 448, 448)    
 
     """
     Ground truth prediction format
     - It is not in global image coordinates
+    - The structure of each cell is <x> <y> <w> <h> <class>
     - It is in the center normalised form where x,y,w,h have been divided by the image
         width and height (not encoded in the YOLO format)
     """
@@ -259,7 +234,7 @@ if __name__ == "__main__":
     mask = torch.bernoulli(mask).bool()
     Y[:,mask,:] = 0
     
-
+    losses = []
     for i in range(25):
         optimiser.zero_grad()
 
@@ -270,4 +245,9 @@ if __name__ == "__main__":
         loss.backward()
         optimiser.step()
 
+        losses.append(loss.item())
+
     print(f"Finished testing model and Loss function")
+    plt.plot(losses)
+    plt.show()
+

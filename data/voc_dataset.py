@@ -14,7 +14,7 @@ class VOCDataset(data.Dataset):
             self.image_paths = [x.strip() for x in file.readlines()]            
 
     def __len__(self):        
-        return 240#Maybe try using num_epochs * 10 #TODO: Change before running #len(self.image_paths)
+        return 16#Maybe try using num_epochs * 10 #TODO: Change before running #len(self.image_paths)
 
     """
     Returns (Image, [det])

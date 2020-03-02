@@ -35,6 +35,7 @@ Non-Maximum Suppression
 """
 def nms(bboxes, threshold):    
     # Get the bounding boxes for each class
+    # print(bboxes)
     classes = bboxes[:,5].int().tolist()
     classes = list(set(classes))
     results = []
@@ -46,7 +47,7 @@ def nms(bboxes, threshold):
         
         if len(list(class_preds.size())) > 1: #if more then 1 bbox belongs to this class
             #`torch.sort` fails on single dimensional tensors hence this if block
-            sorted_conf, sort_indices = torch.sort(class_preds[:,0], descending=True)
+            sorted_conf, sort_indices = torch.sort(class_preds[:,4], descending=True)
             class_preds = class_preds[sort_indices]
             
             for idx in range(class_preds.size(0)-1):
@@ -194,14 +195,14 @@ def build_class_names(class_file):
 
 """
 Returns the bounding box with the highest confidence score
-- Each bounding box `b1` is in the format [conf, x, y, w, h]
+- Each bounding box `b1` is in the format [x, y, w, h, conf]
 """
 def max_box(b1, b2):
     assert b1.size() == b2.size()
     A = torch.zeros(b1.size()).float()
     for i in range(b1.size(0)):
-        #0 is the index of the probability scores
-        A[i,:] = b1[i,:] if b1[i,0] > b2[i,0] else b2[i,:]
+        #4 is the index of the probability scores
+        A[i,:] = b1[i,:] if b1[i,4] > b2[i,4] else b2[i,:]
     return A
 
 """
@@ -209,8 +210,8 @@ For a grid size of (7,7), It expects `A` to be of size 49x6
 Assumes the class confidence score is the first element
 """
 def confidence_threshold(A, conf_thresh):
-    #0 is the index of the confidence value
-    conf_mask = (A[:,0] > conf_thresh).float().unsqueeze(1)    
+    #4 is the index of the confidence value
+    conf_mask = (A[:,4] > conf_thresh).float().unsqueeze(1)    
     conf_mask = conf_mask * A
     conf_mask = torch.nonzero(conf_mask[:,0]).squeeze()
     return A[conf_mask,:]    
@@ -243,12 +244,12 @@ Vectorised form of the intersection over union aka Jacquard index.
 Expects the bounding boxes in the center normalised coordinates.
 """
 def _iou(a,b):    
-    a_x_min, a_y_min = a[:,1], a[:,2]
-    a_x_max, a_y_max = (a[:,3] + a_x_min), (a[:,4] + a_y_min)
-    b_x_min, b_y_min = b[:,1], b[:,2]
-    b_x_max, b_y_max = (b[:,3] + b_x_min), (b[:,4] + b_y_min)
-    area_a = a[:,3] * a[:,4]
-    area_b = b[:,3] * b[:,4]
+    a_x_min, a_y_min = a[:,0], a[:,1]
+    a_x_max, a_y_max = (a[:,2] + a_x_min), (a[:,3] + a_y_min)
+    b_x_min, b_y_min = b[:,0], b[:,1]
+    b_x_max, b_y_max = (b[:,2] + b_x_min), (b[:,3] + b_y_min)
+    area_a = a[:,2] * a[:,3]
+    area_b = b[:,2] * b[:,3]
     zero = torch.zeros(a_x_min.size()).float()    
 
     inter_width = torch.max(zero, torch.min(a_x_max, b_x_max) - torch.max(a_x_min,b_x_min))

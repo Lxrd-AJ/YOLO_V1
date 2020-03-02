@@ -23,25 +23,28 @@ class Yolo_V1(nn.Module):
         # self.extraction_layers, extract_out = self.parse_conv(blocks)
         resnet50 = models.resnet50(pretrained=True)
         self.extraction_layers = nn.Sequential(*list(resnet50.children())[:-2])
-        
 
         # self.final_conv = nn.Conv2d(extract_out, 256, 3, 1, 1)
         self.final_conv = nn.Sequential(
-            nn.Conv2d(2048, 2048, 3, 1, 1), #2048 is the number of output filters from the last resnet bottleneck
+            nn.Conv2d(2048, 1024, 1, 1, 0,bias=False), #2048 is the number of output filters from the last resnet bottleneck
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(0.1, inplace=True),
+
+            # nn.Conv2d(2048, 1024, 3, 1, 1, bias=False), 
             # nn.BatchNorm2d(1024),
-            nn.LeakyReLU(0.1, inplace=True),
+            # nn.LeakyReLU(0.1, inplace=True),
 
-            nn.Conv2d(2048, 1024, 3, 1, 1), 
+            # nn.Conv2d(1024, 1024, 3, 1, 1, bias=False), 
+            # nn.BatchNorm2d(1024),
+            # nn.LeakyReLU(0.1, inplace=True),
+
+            # nn.Conv2d(1024, 512, 3, 1, 1, bias=True),
             # nn.BatchNorm2d(512),
-            nn.LeakyReLU(0.1, inplace=True),
+            # nn.LeakyReLU(0.1, inplace=True),
 
-            nn.Conv2d(1024, 1024, 3, 1, 1), 
+            # nn.Conv2d(512, 512, 1, 1, 1, bias=True),
             # nn.BatchNorm2d(512),
-            nn.LeakyReLU(0.1, inplace=True),
-
-            nn.Conv2d(1024, 512, 3, 1, 0),
-            # nn.BatchNorm2d(256),
-            nn.LeakyReLU(0.1, inplace=True),
+            # nn.LeakyReLU(0.1, inplace=True),
 
             nn.AdaptiveAvgPool2d((1,1))
         )
@@ -54,9 +57,9 @@ class Yolo_V1(nn.Module):
         input to our 1st linear layer would be `256`, the output channels of `final_conv`
         """
         self.linear_layers = nn.Sequential(
-            nn.Linear(512,1024,True),
-            nn.Dropout(),
-            nn.LeakyReLU(0.1, inplace=True),
+            # nn.Linear(512,1024,True),
+            # nn.Dropout(),
+            # nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(1024, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
             nn.Sigmoid()
         )
@@ -65,18 +68,13 @@ class Yolo_V1(nn.Module):
     def forward(self, x):
 
         actv = self.extraction_layers(x)
-        actv = self.final_conv(actv)                
-        
-        # actv = x
-        # for i in range(len(self.extraction_layers)):
-        #     actv = self.extraction_layers[i](actv)                        
-        #     assert not torch.isnan(actv).any()        
+        actv = self.final_conv(actv)
 
         lin_inp = torch.flatten(actv)
         lin_inp = lin_inp.view(x.size()[0],-1) #resize it so that it is flattened by batch        
         lin_out = self.linear_layers(lin_inp)
-        # lin_out = torch.sigmoid(lin_out) #TODO: Move this to where the layers are constructed         
         det_tensor = lin_out.view(-1,self.grid,self.grid,((self.num_bbox * 5) + self.num_classes))
+
         return det_tensor
 
     """
@@ -86,7 +84,8 @@ class Yolo_V1(nn.Module):
     def init_weights(self):
         def init(layer, a=0.1):
             nn.init.kaiming_uniform_(layer.weight, a)
-            layer.bias.data.fill_(0.01)
+            if layer.bias is not None:
+                layer.bias.data.fill_(0.01)
         
         gain_leaky_relu = nn.init.calculate_gain('leaky_relu', 0.1)
         gain_sig = nn.init.calculate_gain('sigmoid')
@@ -96,7 +95,7 @@ class Yolo_V1(nn.Module):
                 init(layer, gain_leaky_relu)
 
         init(self.linear_layers[0], gain_leaky_relu)
-        init(self.linear_layers[3], gain_sig)        
+        # init(self.linear_layers[3], gain_sig)        
 
 
 

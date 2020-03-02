@@ -9,6 +9,7 @@ import time
 import ctypes
 import os
 import random
+import math
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from PIL import Image
@@ -24,9 +25,25 @@ from loss import criterion
 
 
 def batch_collate_fn(batch):    
-    images = [item[0].unsqueeze(0) for item in batch]
-    detections = [item[1] for item in batch]  
+    images = [item[0].unsqueeze(0) for item in batch]    
+    
+    detections = []
+    for item in batch:
+        det = item[1]
+        image_detections = torch.zeros(1, _GRID_SIZE_, _GRID_SIZE_, 5)
+        for cell in det:            
+            gx = math.floor(_GRID_SIZE_ * cell[1])
+            gy = math.floor(_GRID_SIZE_ * cell[2])
+            image_detections[0,gx,gy,0:4] = cell[1:]
+            image_detections[0,gx,gy,4] = cell[0]        
+        detections.append(image_detections)
+
     images = torch.cat(images,0)
+    # For every item in the batch
+    # There is a tensor of size _GRID_SIZE_ x _GRID_SIZE_ x 5 
+    # where each grid cell contains <x> <y> <w> <h> <class>, 
+    # where <x> <y> <w> <h> are normalised relative to the image size and width
+    detections = torch.cat(detections,0)    
     return (images, detections)
 
 
@@ -38,14 +55,7 @@ def evaluate(model, dataloader):
             X, Y = data #transform(data[0]), data[1]
             X = X.to(_DEVICE_)
             res = model(X)
-            batch_loss = 0.0
-            for batch_idx in range(X.size(0)):
-                pred_detections = res[batch_idx].transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30 for use in `criterion`               
-                target_detections = convert_center_coords_to_YOLO(Y[batch_idx], _GRID_SIZE_)
-                target_tensor = gnd_truth_tensor(target_detections)
-                loss = criterion(pred_detections, target_tensor, _STRIDE_)
-                batch_loss += loss
-            batch_loss = batch_loss / X.size(0)
+            batch_loss = criterion(res, Y)            
             eval_loss += batch_loss
     eval_loss = eval_loss / len(dataloader)
     return eval_loss
@@ -57,7 +67,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 8
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 25#150 #Maybe try using len(dataset) / 10
+_NUM_EPOCHS_ = 30 #Maybe try using len(dataset) / 10
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
@@ -77,7 +87,9 @@ for x in ['train','test','val']:
 
 classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
+    torch.autograd.set_detect_anomaly(True)
+
     imagenet_config = "./extraction_imagenet.cfg"
     blocks = parse_config(imagenet_config)
     class_names = build_class_names("./voc.names")
@@ -86,13 +98,13 @@ if __name__ == "__main__":
     model.init_weights()
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([
-                {'params': model.extraction_layers.parameters(), 'lr': 1e-4}, #1e-3
+                {'params': model.extraction_layers.parameters(), 'lr': 1e-3}, #1e-3
                 {'params': model.final_conv.parameters(), 'lr': 1e-2}, 
                 {'params': model.linear_layers.parameters()}
             ], lr=1e-1, momentum=0.9)
     
     #The learning rate scheduler will be added later post model debugging
-    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=5, gamma=0.1) #for transfer learning
+    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=10, gamma=0.1) #for transfer learning
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -112,54 +124,31 @@ if __name__ == "__main__":
         model.train()
 
         for idx, data in enumerate(dataloader['train'],0):
-            images, detections = data
-            images = images.to(_DEVICE_)            
-            
-            optimiser.zero_grad()
-            
-            #+++++++++++++++++++++++++++++++++++
-            #Passing junk data
-            # images = torch.randn(2, 3, 448, 448)
-            # detections = torch.rand(_BATCH_SIZE_, 1, 5)
-            # detections[:,:,0] *= 20
-            
-            # x = im2PIL(images[0])            
-            # x = draw_detections(x, detections[0], class_names)            
-            #+++++++++++++++++++++++++++++++++++
-            
-            predictions = model(images)
-
-            batch_loss = 0.0
-            iteration_loss = 0.0
-            num_batch = len(detections)
-
             with torch.set_grad_enabled(True):
-                # Having 3 foor-loops might be slow, this could be improved later as premature optimisation is the root of all evils
-                for batch_idx in range(num_batch):
-                    pred_detections = predictions[batch_idx]#.transpose(0,2) #convert the dimension from 30x7x7 to 7x7x30                
-                    target_detections = convert_center_coords_to_YOLO(detections[batch_idx], _GRID_SIZE_)
-                    target_tensor = gnd_truth_tensor(target_detections)                
-
-                    loss = criterion(pred_detections, target_tensor, _STRIDE_)
-                    
-                    batch_loss += loss                    
-                    
-                iteration_loss = batch_loss / num_batch            
-                epoch_loss += iteration_loss.item()
-                if True: #TODO: Remove #idx % 1000 == 0:
-                    print(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {iteration_loss.item()}")
+                images, detections = data
                 
-                    # m_arch = make_dot(iteration_loss, params=dict(model.named_parameters()))
+                images = images.to(_DEVICE_)            
+                optimiser.zero_grad()
+                
+                predictions = model(images)
+
+                batch_loss = criterion(predictions, detections)                
+                epoch_loss += batch_loss.item()
+                
+                if True: #TODO: Remove #idx % 1000 == 0:
+                    print(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {batch_loss.item()}")
+                
+                    # m_arch = make_dot(batch_loss, params=dict(model.named_parameters()))
                     # Source(m_arch).render("./model_arch")
 
-                iteration_loss.backward()
+                batch_loss.backward()
                 optimiser.step()
 
         epoch_loss = epoch_loss / len(dataloader['train'])
         epoch_elapsed = time.time() - epoch_since
         print(f"\tAverage Train Epoch loss is {epoch_loss:.2f} [{epoch_elapsed//60:.0f}m {epoch_elapsed%60:.0f}s]")
         avg_train_loss.append(epoch_loss)
-
+        
         exp_lr_scheduler.step()
 
         #evaluate on the test dataset
@@ -168,20 +157,20 @@ if __name__ == "__main__":
         print(f"\tAverage Test Loss is {test_loss:.2f}")
 
         # Save the model parameters https://pytorch.org/tutorials/beginner/saving_loading_models.html
-        if True: #TODO: Remove after debugging #epoch % 10 == 0:
+        if epoch % 10 == 0:
             torch.save(model.state_dict(), "./yolo_v1_model.pth")
             torch.save(optimiser.state_dict(), "./optimiser_yolo.pth")
 
         #Make some plots baby! 
         plt.plot(avg_train_loss,'r',label='Train',marker='o')
-        plt.plot(avg_test_loss,'b',label='Test',marker='o')
-        plt.xticks(np.arange(0,_NUM_EPOCHS_))
+        plt.plot(avg_test_loss,'b',label='Test',marker='x')
+        plt.xticks(np.arange(0,_NUM_EPOCHS_,5))
         
         plt.title(f"Train & Test loss using {len(dataset['train'])} images")
         plt.grid(True)
         plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
     
-    plt.legend()
+    # plt.legend()
     plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
 
     #Evaluate on the validation dataset
