@@ -4,6 +4,10 @@ import torch
 import math
 from PIL import Image, ImageDraw, ImageFont
 
+
+_DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def imshow(inp, title=None):
     """Imshow for Tensor."""
     inp = inp.numpy().transpose((1, 2, 0))
@@ -250,7 +254,7 @@ def _iou(a,b):
     b_x_max, b_y_max = (b[:,2] + b_x_min), (b[:,3] + b_y_min)
     area_a = a[:,2] * a[:,3]
     area_b = b[:,2] * b[:,3]
-    zero = torch.zeros(a_x_min.size()).float()    
+    zero = torch.zeros(a_x_min.size()).float().to(_DEVICE_)    
 
     inter_width = torch.max(zero, torch.min(a_x_max, b_x_max) - torch.max(a_x_min,b_x_min))
     inter_height = torch.max(zero, torch.min(a_y_max, b_y_max) - torch.max(a_y_min,b_y_min))
