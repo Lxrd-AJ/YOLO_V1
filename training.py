@@ -125,7 +125,9 @@ if __name__ == "__main__":
             with torch.set_grad_enabled(True):
                 images, detections = data
                 
-                images = images.to(_DEVICE_)            
+                images = images.to(_DEVICE_)
+                detections = detections.to(_DEVICE_)
+                
                 optimiser.zero_grad()
                 
                 predictions = model(images)
