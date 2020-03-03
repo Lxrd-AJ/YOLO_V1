@@ -144,7 +144,7 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
         for i in range(P.size(0)): #loop over each cell coordinate
             if G[i].sum() > 0: #there is a ground truth prediction at this cell
                 pred_cls = P[i,5:]
-                true_cls = torch.zeros(pred_cls.size()).to(_DEVICE_)
+                true_cls = torch.zeros(pred_cls.size()).cpu()
                 true_cls[int(G[i,4])] = 1                
 
                 # grid cell regression loss
