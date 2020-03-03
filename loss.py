@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+_DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def normalised_to_global(A, width=448, height=448):
     """
@@ -48,10 +49,10 @@ def cell_to_global(A, im_size=448, stride=64, B=2, S=7):
     res = []
     for v in bboxes: # v would be of size N*5
         #convert the <x> <y> and <w> <h> cell coordinates to global image coordinates
-        v[:,:2] = (v[:,:2] * stride).round() + grid
-        v[:,2:4] = (torch.pow(v[:,2:4].clone().detach(),2) * im_size).round()
+        v[:,:2] = (v[:,:2] * stride).round().to(_DEVICE_) + grid
+        v[:,2:4] = (torch.pow(v[:,2:4].clone().detach(),2) * im_size).round().to(_DEVICE_)
         res.append(v)
-    res = torch.cat(res,1)    
+    res = torch.cat(res,1).to(_DEVICE_)    
     return res
 
 
