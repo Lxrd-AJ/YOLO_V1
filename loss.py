@@ -43,6 +43,7 @@ def cell_to_global(A, im_size=448, stride=64, B=2, S=7):
     rows = torch.FloatTensor(rows).view(-1,1)
     cols = torch.FloatTensor(cols).view(-1,1)
     grid = torch.cat((rows,cols),1) * stride
+    grid = grid.to(_DEVICE_)
     
     bboxes = torch.split(A, A.size(1)//B, 1) #split the N*10 bboxes into two N*5 sets
 
