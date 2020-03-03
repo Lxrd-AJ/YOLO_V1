@@ -19,7 +19,7 @@ from data.voc_dataset import VOCDataset
 from utilities import draw_detection, parse_config, build_class_names, iou, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL, draw_detections
 from yolo_v1 import Yolo_V1
 # from torchviz import make_dot
-from graphviz import Source
+# from graphviz import Source
 from loss import criterion
 
 
