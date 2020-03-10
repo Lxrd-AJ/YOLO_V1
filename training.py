@@ -54,6 +54,7 @@ def evaluate(model, dataloader):
         for idx, data in enumerate(dataloader, 0):
             X, Y = data #transform(data[0]), data[1]
             X = X.to(_DEVICE_)
+            Y = Y.to(_DEVICE_)
             res = model(X)
             batch_loss = criterion(res, Y)            
             eval_loss += batch_loss
@@ -71,7 +72,7 @@ _NUM_EPOCHS_ = 150
 
 # No need to resize here in transforms as the dataset class does it already
 transform = transforms.Compose([
-    # transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
+    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
@@ -135,7 +136,7 @@ if __name__ == "__main__":
                 batch_loss = criterion(predictions, detections)                
                 epoch_loss += batch_loss.item()
                 
-                if idx % 500 == 0:
+                if idx % 100 == 0:
                     print(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {batch_loss.item()}")
                 
                     # m_arch = make_dot(batch_loss, params=dict(model.named_parameters()))

@@ -32,7 +32,9 @@ class_color_mapping = {
 
 if __name__ == "__main__":
     model = Yolo_V1(class_names, 7)
-    model.load_state_dict(torch.load('./yolo_v1_model.pth'))
+    model.load_state_dict( \
+        torch.load('./model_checkpoints/yolo_v1_model.pth', map_location=torch.device('cpu')) \
+    )
     model.eval()
     
     # print(model)
@@ -49,7 +51,7 @@ if __name__ == "__main__":
         X__ = X.copy()
         for det in dets:
             draw_detection(X, det[1:], class_names[int(det[0])])        
-        # X.show()
+        X.show()
 
         # Rearrange predicted detections
         X_ = transform(X).unsqueeze(0)
@@ -89,20 +91,25 @@ if __name__ == "__main__":
 
             #confidence threshold the bounding boxes by their class confidence scores            
             
-            print(bboxes.size())
-            bboxes = confidence_threshold(bboxes, 0.3)
+            bboxes = confidence_threshold(bboxes, 0.5)
             # print(f"Len {bboxes.size(0)} b4 NMS")
             # bboxes = bboxes.unsqueeze(0)
-            
+            #TODO: Fix nms
             # bboxes = nms(bboxes, 0.1)
             # print(f"Len {len(bboxes)} after NMS")
 
             #TEST: Show the predictions
             print(bboxes.size())
-            for bbox in bboxes:  
-                print(bbox)     
+            if len(bboxes.shape) == 1:
+                bbox = bboxes
+                print(bbox)
                 c = int(bbox[5])        
                 draw_detection(X__,bbox[:4] / _IMAGE_SIZE_[0], class_names[c], class_color_mapping[c])
+            else:
+                for bbox in bboxes:  
+                    print(bbox)     
+                    c = int(bbox[5])        
+                    draw_detection(X__,bbox[:4] / _IMAGE_SIZE_[0], class_names[c], class_color_mapping[c])
             X__.show()
             # X.show()
         # print(predictions.size())

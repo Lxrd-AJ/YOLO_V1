@@ -136,15 +136,15 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
     for idx, out_tensor in enumerate(output):
         best_boxes = box(out_tensor, target[idx]) #e.g 7x7x(5+20)
         sz = best_boxes.size()
-        P = best_boxes.view(sz[0] * sz[1], -1) #e.g 49x25
-        G = target[idx].view(sz[0] * sz[1], -1) #e.g 49x5
+        P = best_boxes.view(sz[0] * sz[1], -1).to(_DEVICE_) #e.g 49x25
+        G = target[idx].view(sz[0] * sz[1], -1).to(_DEVICE_) #e.g 49x5
 
         image_loss = torch.tensor(0).float().to(_DEVICE_)
 
         for i in range(P.size(0)): #loop over each cell coordinate
             if G[i].sum() > 0: #there is a ground truth prediction at this cell
                 pred_cls = P[i,5:]
-                true_cls = torch.zeros(pred_cls.size()).cpu()
+                true_cls = torch.zeros(pred_cls.size()).to(_DEVICE_)
                 true_cls[int(G[i,4])] = 1                
 
                 # grid cell regression loss

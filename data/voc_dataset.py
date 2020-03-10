@@ -35,8 +35,9 @@ class VOCDataset(data.Dataset):
             detections = [x.split() for x in detections]
             detections = [[float(c) for c in detection] for detection in detections]
 
-        if self.transform:            
+        if self.transform:
             img = self.transform(img)
+            # img, detections = self.transform(img, detections)
         
         detections = torch.Tensor(detections)#.unsqueeze(0)
         # print(img.size(), detections.size())

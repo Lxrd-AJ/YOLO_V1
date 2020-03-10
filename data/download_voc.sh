@@ -10,6 +10,6 @@ tar xf VOCtest_06-Nov-2007.tar
 
 python voc_label.py
 
-cat 2007_train.txt 2012_train.txt > train.txt
-cat 2007_test.txt > test.txt
+#Join the train and test into one dataset
+cat 2007_train.txt 2012_train.txt 2007_test.txt > train.txt
 cat 2007_val.txt 2012_val.txt > val.txt
