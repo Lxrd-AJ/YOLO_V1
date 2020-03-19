@@ -82,7 +82,7 @@ def box(output, target, size=448, B=2):
     pred_classes = output[:,B*5:] #slice out the pred classes  e.g 49x10
     target = target.view(sz[0] * sz[1], -1) #e.g 49*5
 
-    pred_bboxes_global = cell_to_global(pred_bboxes.clone().detach()) #e.g 49*10
+    pred_bboxes_global = cell_to_global(pred_bboxes.clone().detach(), B=B) #e.g 49*10
     target_global = normalised_to_global(target.clone().detach()) #e.g 49*5
 
     num_classes = output.size(1) - (B*5)
@@ -134,7 +134,7 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
 
     batch_loss = torch.tensor(0).float().to(_DEVICE_)
     for idx, out_tensor in enumerate(output):
-        best_boxes = box(out_tensor, target[idx]) #e.g 7x7x(5+20)
+        best_boxes = box(out_tensor, target[idx], B=2) #e.g 7x7x(5+20)
         sz = best_boxes.size()
         P = best_boxes.view(sz[0] * sz[1], -1).to(_DEVICE_) #e.g 49x25
         G = target[idx].view(sz[0] * sz[1], -1).to(_DEVICE_) #e.g 49x5
@@ -218,7 +218,7 @@ if __name__ == "__main__":
     net = TestNet()
     optimiser = torch.optim.Adam(net.parameters(), lr=1e-5)
 
-    X = torch.randn(2, 3, 448, 448)    
+    X = torch.randn(3, 3, 448, 448)    
 
     """
     Ground truth prediction format
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     - It is in the center normalised form where x,y,w,h have been divided by the image
         width and height (not encoded in the YOLO format)
     """
-    Y = torch.rand(2,7,7,5)
+    Y = torch.rand(3,7,7,5)
     Y[:,:,:,:4] = torch.clamp(Y[:,:,:,:4], 0,1) #This is not encoded in the YOLO format
     Y[:,:,:,4] = (Y[:,:,:,4] * 20).floor()
     #zero out some cells to represent no ground truth data at those locations
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     Y[:,mask,:] = 0
     
     losses = []
-    for i in range(25):
+    for i in range(2):
         optimiser.zero_grad()
 
         Y_ = net(X)        

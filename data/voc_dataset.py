@@ -6,8 +6,9 @@ import math
 from PIL import Image, ImageDraw, ImageFont
 
 class VOCDataset(data.Dataset):
-    def __init__(self, data_file, image_size=(448,448), grid_size=7, transform=None):        
+    def __init__(self, data_file, image_size=(448,448), grid_size=7, transform=None, pair_transform=None):        
         self.transform = transform
+        self.pair_transform = pair_transform
         self.image_size = image_size
         self.grid_size = grid_size
         with open(data_file) as file:            
@@ -35,11 +36,17 @@ class VOCDataset(data.Dataset):
             detections = [x.split() for x in detections]
             detections = [[float(c) for c in detection] for detection in detections]
 
+        detections = torch.Tensor(detections)#.unsqueeze(0)
+
+        if self.pair_transform:
+            img, detections = self.pair_transform((img, detections))
+
         if self.transform:
-            img = self.transform(img)
+            for t in self.transform:
+                img = t(img)
             # img, detections = self.transform(img, detections)
         
-        detections = torch.Tensor(detections)#.unsqueeze(0)
+        
         # print(img.size(), detections.size())
         return (img, detections)
 

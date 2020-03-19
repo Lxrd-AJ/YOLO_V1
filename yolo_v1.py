@@ -59,7 +59,8 @@ class Yolo_V1(nn.Module):
         input to our 1st linear layer would be `256`, the output channels of `final_conv`
         """
         self.linear_layers = nn.Sequential(
-            # nn.Linear(1024,1024,True),
+            #TODO: Try adding 1 more linear layer
+            # nn.Linear(50176,4096,True),
             # nn.Dropout(),
             # nn.LeakyReLU(0.1, inplace=True),
             nn.Linear(1024, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
