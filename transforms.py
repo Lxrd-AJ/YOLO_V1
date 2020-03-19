@@ -103,8 +103,8 @@ if __name__ == "__main__":
 
     normalise_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.RandomErasing(p=0.1, scale=(0.02, 0.12), ratio=(0.1, 1.1)),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.RandomErasing(p=0.1, scale=(0.02, 0.12), ratio=(0.1, 1.1)),
     ])
 
     dataset = VOCDataset(f"./data/train.txt", transform=[image_transform, normalise_transform], pair_transform=pair_transform)

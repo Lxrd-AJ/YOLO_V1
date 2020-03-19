@@ -22,7 +22,7 @@ data/val.txt
 model_arch
 model_arch.pdf
 
-
+*_elems_train_val_loss.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

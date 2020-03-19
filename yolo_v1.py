@@ -6,7 +6,6 @@ import ctypes
 import os
 from torchvision import models
 from PIL import Image
-# from utilities import convert_center_coords_to_noorm, max_box, convert_cls_idx_name, confidence_threshold #parse_config
 from pprint import pprint
 from collections import OrderedDict
 

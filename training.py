@@ -21,6 +21,7 @@ from yolo_v1 import Yolo_V1
 # from torchviz import make_dot
 # from graphviz import Source
 from loss import criterion
+from transforms import RandomBlur, RandomHorizontalFlip, RandomVerticalFlip
 
 
 
@@ -70,20 +71,35 @@ _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _NUM_EPOCHS_ = 150
 
+
 # No need to resize here in transforms as the dataset class does it already
-transform = transforms.Compose([
-    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
+image_transform = transforms.Compose([
+    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),        
+    RandomBlur(probability=0.2)
+])
+#Image detection pair transforms
+pair_transform = transforms.Compose([
+    RandomHorizontalFlip(probability=0.5),
+    RandomVerticalFlip(probability=0.3)
+])
+
+normalise_transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
+erase_transform = transforms.RandomErasing(p=0.1, scale=(0.02, 0.12), ratio=(0.1, 1.1))
 
-dataset = { x: VOCDataset(f"./data/{x}.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_, transform=transform)
-            for x in ['train','test','val']}
+
+dataset = { 
+    'train': VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_,transform=[image_transform, normalise_transform, erase_transform], pair_transform=pair_transform),
+    'val': VOCDataset(f"./data/val.txt", transform=[normalise_transform])
+}
+
 dataloader = {x: utils.data.DataLoader(dataset[x], batch_size=_BATCH_SIZE_, shuffle=True, num_workers=4, collate_fn=batch_collate_fn)
-                for x in ['train','test','val']}
+                for x in ['train','val']}
 
-for x in ['train','test','val']:
+for x in ['train','val']:
     print(f"{x} dataset size => {len(dataset[x])}")
 
 classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
@@ -91,8 +107,6 @@ classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat"
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
 
-    imagenet_config = "./extraction_imagenet.cfg"
-    blocks = parse_config(imagenet_config)
     class_names = build_class_names("./voc.names")
 
     model = Yolo_V1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
@@ -113,7 +127,7 @@ if __name__ == "__main__":
 
     train_since = time.time()
     avg_train_loss = []
-    avg_test_loss = []
+    avg_val_loss = []
     for epoch in range(_NUM_EPOCHS_):
         lr = [group['lr'] for group in optimiser.param_groups]
         print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}\t Learning Rate = {lr}")
@@ -151,24 +165,24 @@ if __name__ == "__main__":
         avg_train_loss.append(epoch_loss)
         
 
-        #evaluate on the test dataset
-        test_loss = evaluate(model, dataloader['test'])
-        avg_test_loss.append(test_loss)
-        print(f"\tAverage Test Loss is {test_loss:.2f}")
+        #evaluate on the validation dataset
+        val_loss = evaluate(model, dataloader['val'])
+        avg_val_loss.append(val_loss)
+        print(f"\tAverage Val Loss is {val_loss:.2f}")
 
-        exp_lr_scheduler.step(test_loss)
+        exp_lr_scheduler.step(val_loss)
 
         # Save the model parameters https://pytorch.org/tutorials/beginner/saving_loading_models.html
         if epoch % 10 == 0:
             torch.save(model.state_dict(), "./yolo_v1_model.pth")
-            torch.save(optimiser.state_dict(), "./optimiser_yolo.pth")
+            # torch.save(optimiser.state_dict(), "./optimiser_yolo.pth")
 
         #Make some plots baby! 
         plt.plot(avg_train_loss,'r',label='Train',marker='o')
-        plt.plot(avg_test_loss,'b',label='Test',marker='x')
+        plt.plot(avg_val_loss,'b',label='Val',marker='x')
         plt.xticks(np.arange(0,_NUM_EPOCHS_,10))
         
-        plt.title(f"Train & Test loss using {len(dataset['train'])} images")
+        plt.title(f"Train & Val loss using {len(dataset['train'])} images")
         plt.grid(True)
         plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
     
@@ -176,7 +190,5 @@ if __name__ == "__main__":
     plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
 
     #Evaluate on the validation dataset
-    val_loss = evaluate(model, dataloader['val'])
     train_elapsed = time.time() - train_since
-    print(f"Validation loss is {val_loss:.2f}")
     print(f"Total training time is [{train_elapsed//60:.0f}m {train_elapsed%60:.0f}s]")
