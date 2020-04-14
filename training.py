@@ -17,7 +17,7 @@ from pprint import pprint
 from collections import OrderedDict
 from data.voc_dataset import VOCDataset
 from utilities import draw_detection, parse_config, build_class_names, iou, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL, draw_detections
-from yolo_v1 import Yolo_V1
+from yolo_v1 import YOLOv1
 # from torchviz import make_dot
 # from graphviz import Source
 from loss import criterion
@@ -36,6 +36,11 @@ def batch_collate_fn(batch):
             gx = math.floor(_GRID_SIZE_ * cell[1])
             gy = math.floor(_GRID_SIZE_ * cell[2])
             image_detections[0,gx,gy,0:4] = cell[1:]
+            #TODO: Ensure that the x,y coordinates are relative to the grid cells
+            # image_detections[0,gx,gy,0] = (_GRID_SIZE_ * cell[1]) - gx
+            # image_detections[0,gx,gy,1] = (_GRID_SIZE_ * cell[2]) - gy
+            # image_detections[0,gx,gy,2:4] = cell[3:]
+
             image_detections[0,gx,gy,4] = cell[0]        
         detections.append(image_detections)
 
@@ -109,7 +114,7 @@ if __name__ == "__main__":
 
     class_names = build_class_names("./voc.names")
 
-    model = Yolo_V1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
+    model = YOLOv1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
     model.init_weights()
     # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
     optimiser = optim.SGD([

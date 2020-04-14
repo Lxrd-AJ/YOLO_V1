@@ -8,7 +8,7 @@ import random
 from torch.autograd import Variable
 from utilities import build_class_names, draw_detection, confidence_threshold, max_box, nms
 from PIL import Image, ImageOps
-from yolo_v1 import Yolo_V1
+from yolo_v1 import YOLOv1
 from data.voc_dataset import VOCDataset
 
 transform = transforms.Compose([    
@@ -31,7 +31,7 @@ class_color_mapping = {
 }
 
 if __name__ == "__main__":
-    model = Yolo_V1(class_names, 7)
+    model = YOLOv1(class_names, 7)
     model.load_state_dict( \
         torch.load('./model_checkpoints/yolo_v1_model.pth', map_location=torch.device('cpu')) \
     )
