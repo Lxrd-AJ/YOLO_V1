@@ -22,6 +22,7 @@ from yolo_v1 import YOLOv1
 # from graphviz import Source
 from loss import criterion
 from transforms import RandomBlur, RandomHorizontalFlip, RandomVerticalFlip
+from debug_grad import gradient_hook, forward_hook
 
 
 
@@ -36,11 +37,6 @@ def batch_collate_fn(batch):
             gx = math.floor(_GRID_SIZE_ * cell[1])
             gy = math.floor(_GRID_SIZE_ * cell[2])
             image_detections[0,gx,gy,0:4] = cell[1:]
-            #TODO: Ensure that the x,y coordinates are relative to the grid cells
-            # image_detections[0,gx,gy,0] = (_GRID_SIZE_ * cell[1]) - gx
-            # image_detections[0,gx,gy,1] = (_GRID_SIZE_ * cell[2]) - gy
-            # image_detections[0,gx,gy,2:4] = cell[3:]
-
             image_detections[0,gx,gy,4] = cell[0]        
         detections.append(image_detections)
 
@@ -71,10 +67,10 @@ def evaluate(model, dataloader):
 
 _GRID_SIZE_ = 7
 _IMAGE_SIZE_ = (448,448)
-_BATCH_SIZE_ = 16
+_BATCH_SIZE_ = 8#16
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 150
+_NUM_EPOCHS_ = 30
 
 
 # No need to resize here in transforms as the dataset class does it already
@@ -97,7 +93,7 @@ erase_transform = transforms.RandomErasing(p=0.1, scale=(0.02, 0.12), ratio=(0.1
 
 
 dataset = { 
-    'train': VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_,transform=[image_transform, normalise_transform, erase_transform], pair_transform=pair_transform),
+    'train': VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_,transform=[normalise_transform], pair_transform=None), #transform=[image_transform, normalise_transform, erase_transform]   pair_transform=pair_transform
     'val': VOCDataset(f"./data/val.txt", transform=[normalise_transform])
 }
 
@@ -116,12 +112,15 @@ if __name__ == "__main__":
 
     model = YOLOv1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
     model.init_weights()
-    # optimiser = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+    model.linear_layers[-1].register_forward_hook(forward_hook) #TODO: Remove
+    model.linear_layers[-1].register_backward_hook(gradient_hook) #TODO: Remove
+
     optimiser = optim.SGD([
-                {'params': model.extraction_layers.parameters(), 'lr': 1e-3}, #1e-3
+                {'params': model.feature_extractor.parameters(), 'lr': 1e-3}, #1e-3
                 {'params': model.final_conv.parameters(), 'lr': 1e-2}, 
                 {'params': model.linear_layers.parameters()}
-            ], lr=1e-1, momentum=0.9)
+            ], lr=1e-2, momentum=0.9)
     
     # exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=15, gamma=0.1) #for transfer learning
     exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser)
@@ -152,10 +151,10 @@ if __name__ == "__main__":
                 
                 predictions = model(images)
 
-                batch_loss = criterion(predictions, detections)                
+                batch_loss = criterion(predictions, detections)
                 epoch_loss += batch_loss.item()
                 
-                if idx % 100 == 0:
+                if True: #idx % 100 == 0:
                     print(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {batch_loss.item()}")
                 
                     # m_arch = make_dot(batch_loss, params=dict(model.named_parameters()))

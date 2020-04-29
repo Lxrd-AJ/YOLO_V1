@@ -21,7 +21,7 @@ _GRID_SIZE_ = 7
 _STRIDE_ = _IMAGE_SIZE_[0] / _GRID_SIZE_
 class_names = build_class_names("./voc.names")
 
-dataset = VOCDataset(f"./data/val.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_)
+dataset = VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_)
 
 class_color_mapping = {
     0: "red", 1: "blue", 2: "AntiqueWhite", 3: "Aquamarine", 4: "Black",
@@ -33,7 +33,8 @@ class_color_mapping = {
 if __name__ == "__main__":
     model = YOLOv1(class_names, 7)
     model.load_state_dict( \
-        torch.load('./model_checkpoints/yolo_v1_model.pth', map_location=torch.device('cpu')) \
+        # torch.load('./model_checkpoints/yolo_v1_model.pth', map_location=torch.device('cpu')) \
+        torch.load('./yolo_v1_model.pth', map_location=torch.device('cpu')) \
     )
     model.eval()
     

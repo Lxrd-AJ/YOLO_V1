@@ -103,6 +103,7 @@ def box(output, target, size=448, B=2):
         bounding box with the highest confidence
         """
 
+        #TODO: Shouldn't I be returing `bboxes_global` and not `bboxes`. This could mean that P and G in criterion are not on the same scale
         #case 1: There is a ground truth prediction at this cell i
         if target[i].sum() > 0:#select the box with the highest intersection over union
             repeated_target = target[i].clone().detach().repeat(bboxes.size(0),1)
@@ -123,13 +124,11 @@ def box(output, target, size=448, B=2):
 def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
     """
     Computes the average loss (YOLO) between the output and the target batch tensor
-    - It assumes the both the output and target are encoded in the YOLO format
-        where <x> and <y> are normalised to the grid cell
-        and <w> and <h> is the square root of the width of the object / width of image
+    
     - The output is of size NxSxSx(Bx5+C) where B is the no. of bounding boxes encoded 
         in the YOLO format
     - The target is of size NxSxSx5 in format <x> <y> <w> <h> <class> not encoded in 
-        the YOLO format but normalised wrt the image
+        the YOLO format but normalised wrt the image 
     """
 
     batch_loss = torch.tensor(0).float().to(_DEVICE_)
@@ -146,6 +145,12 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
                 pred_cls = P[i,5:]
                 true_cls = torch.zeros(pred_cls.size()).to(_DEVICE_)
                 true_cls[int(G[i,4])] = 1                
+
+                # TODO: Remove
+                _EPS_ = 1e-7
+                # print(P[i,2:4], G[i,2:4])
+                # print(torch.pow(torch.sqrt(P[i,2:4] + _EPS_) - torch.sqrt(G[i,2:4] + _EPS_),2).sum())
+                # print(F.mse_loss(torch.sqrt(P[i,2:4]), torch.sqrt(G[i,2:4]) + _EPS_, reduction='sum'))
 
                 # grid cell regression loss
                 grid_loss = lambda_coord * torch.pow(P[i,0:2] - G[i,0:2], 2).sum() \

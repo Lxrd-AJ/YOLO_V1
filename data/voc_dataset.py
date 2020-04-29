@@ -15,7 +15,7 @@ class VOCDataset(data.Dataset):
             self.image_paths = [x.strip() for x in file.readlines()]            
 
     def __len__(self):        
-        return len(self.image_paths)
+        return 16#len(self.image_paths)
 
     """
     Returns (Image, [det])
