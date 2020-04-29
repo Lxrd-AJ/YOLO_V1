@@ -245,13 +245,13 @@ def iou(a,b):
 
 """
 Vectorised form of the intersection over union aka Jacquard index.
-Expects the bounding boxes in the center normalised coordinates.
+Expects the bounding boxes in the center coordinates.
 """
 def _iou(a,b):    
-    a_x_min, a_y_min = a[:,0], a[:,1]
-    a_x_max, a_y_max = (a[:,2] + a_x_min), (a[:,3] + a_y_min)
-    b_x_min, b_y_min = b[:,0], b[:,1]
-    b_x_max, b_y_max = (b[:,2] + b_x_min), (b[:,3] + b_y_min)
+    a_x_min, a_y_min = a[:,0] - a[:,2]/2.0, a[:,1] - a[:,3]/2.0
+    a_x_max, a_y_max = (a[:,0] + a[:,2]/2.0), (a[:,1] + a[:,3]/2.0)
+    b_x_min, b_y_min = b[:,0] - b[:,2]/2.0, b[:,1] - b[:,3]/2.0
+    b_x_max, b_y_max = b[:,0] + b[:,2]/2.0, b[:,1] + b[:,3]/2.0
     area_a = a[:,2] * a[:,3]
     area_b = b[:,2] * b[:,3]
     zero = torch.zeros(a_x_min.size()).float().to(_DEVICE_)    

@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 
 
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+_EPS_ = 1e-8 #safeguard to prevent torch.sqrt(0) returning NaN/infinity as in older versions of torch
 
 def normalised_to_global(A, width=448, height=448):
     """
-    Converts a bounding box in the center normalised coordinates to the center global 
-    coordinates.
+    Converts a bounding box in the center normalised coordinates (values between 0 and 1) to 
+    the center global coordinates (wrt to the image width and height).
     A is in the format N*5 where N is the number of bounding boxes and each bounding
     box is in the format <x> <y> <w> <h> <class>
 
@@ -22,6 +23,7 @@ def normalised_to_global(A, width=448, height=448):
     A[:,2] = A[:,2] * width
     A[:,3] = A[:,3] * height 
     return A
+
 
 def cell_to_global(A, im_size=448, stride=64, B=2, S=7):
     """
@@ -42,15 +44,17 @@ def cell_to_global(A, im_size=448, stride=64, B=2, S=7):
     #create a grid with each cell containing the (x,y) location multiplied by stride  
     rows = torch.FloatTensor(rows).view(-1,1)
     cols = torch.FloatTensor(cols).view(-1,1)
-    grid = torch.cat((rows,cols),1) * stride
+    grid = torch.cat((rows,cols),1) * stride #now the grid system is measured relative to the image
     grid = grid.to(_DEVICE_)
     
-    bboxes = torch.split(A, A.size(1)//B, 1) #split the N*10 bboxes into two N*5 sets
+    bboxes = torch.split(A, A.size(1)//B, 1) #split the N*10 bboxes into a tuple of (Nx5,Nx5) assuming B=2
 
     res = []
-    for v in bboxes: # v would be of size N*5
-        #convert the <x> <y> and <w> <h> cell coordinates to global image coordinates
-        v[:,:2] = (v[:,:2] * stride).round() + grid
+    for v in bboxes: # v would be a chunk from the tuple `bboxes`, of size N*5
+        # convert the <x> <y> and <w> <h> cell coordinates to global image coordinates
+        # adding `grid` and multiplying by `stride` takes the predictions relative to a cell and transforms it 
+        # to a prediction in global image coordinates
+        v[:,:2] = (v[:,:2] * stride).round() + grid 
         v[:,2:4] = (torch.pow(v[:,2:4].clone().detach(),2) * im_size).round()
         res.append(v)
     res = torch.cat(res,1).to(_DEVICE_)    
@@ -59,35 +63,35 @@ def cell_to_global(A, im_size=448, stride=64, B=2, S=7):
 
 def box(output, target, size=448, B=2):
     """
-    Returns the box to use for loss calculation. This is either the box with the 
-    highest confidence or the box with the highest intersection over union
-    with the target
-    Receives an output prediction of size S*S*(B*5+C) where each cell is in
-    the format <x> <y> <w> <h> <conf> | <x> <y> <w> <h> <conf> | <cls.......probs>
-    assuming number of bounding boxes is 2
-    and `target` ground truth of size S*S*5 where target is in the format
+    Returns the bounding box to use for loss calculation at each grid cell. This is either the box with the 
+    highest confidence or the box with the highest intersection over union with the ground truth target.
+
+    Receives `output` a prediction of size SxSx(B*5+C) where each cell is in the format 
+        <x> <y> <w> <h> <conf> | <x> <y> <w> <h> <conf> | <cls.......probs>
+    assuming number of bounding boxes is 2 and `target` ground truth of size SxSx5 where target is in the format
         <x> <y> <w> <h> <cls>
-    and returns the bounding box to use
-    for each grid cell.
+    
+    the function returns the bounding box to use for each grid cell as a tensor of size SxSx(5+C)
 
     - return bbox:  Tensor of size SxSx(5+C) where each bounding box is in 
                     the format <x> <y> <w> <h> <confidence> <cls probs>
-                    The coordinate, width and height are in global image coordinates
+                    The coordinate, width and height are in global image coordinates as `cell_to_global` and `normalised_to_global` are used to transform `output` and `target` respectively
     """
     
-    #Reshape the output tensor into (S*S)*(B*5+C) to make it easier to work with
+    #Reshape the output tensor into (S*S)x(B*5+C) to make it easier to work with
     sz = output.size()
-    output = output.view(sz[0] * sz[1], -1) #e.g 49*30
-    pred_bboxes = output[:,:B*5] #slice out only the bounding boxes e.g 49*10
+    output = output.view(sz[0] * sz[1], -1) #e.g 49x30
+    pred_bboxes = output[:,:B*5] #slice out only the bounding boxes e.g 49x10
     pred_classes = output[:,B*5:] #slice out the pred classes  e.g 49x10
-    target = target.view(sz[0] * sz[1], -1) #e.g 49*5
+    target = target.view(sz[0] * sz[1], -1) #e.g 49x5
 
-    pred_bboxes_global = cell_to_global(pred_bboxes.clone().detach(), B=B) #e.g 49*10
+    # The `*_global` variables are needed for IoU calculations 
+    pred_bboxes_global = cell_to_global(pred_bboxes.clone().detach(), B=B) #e.g 49x10
     target_global = normalised_to_global(target.clone().detach()) #e.g 49*5
 
     num_classes = output.size(1) - (B*5)
     
-    R = torch.zeros(output.size(0),5+num_classes) #result to return    
+    R = torch.zeros(output.size(0),5+num_classes) #result to return. e.g it is of size 49x25  
     for i in range(output.size(0)): #loop over each cell coordinate
         # `bboxes` will be a tuple of size B (e.g 2), where each elem is 1*5
         bboxes = torch.split(pred_bboxes[i,:], pred_bboxes.size(1)//B)        
@@ -103,12 +107,10 @@ def box(output, target, size=448, B=2):
         bounding box with the highest confidence
         """
 
-        #TODO: Shouldn't I be returing `bboxes_global` and not `bboxes`. This could mean that P and G in criterion are not on the same scale
         #case 1: There is a ground truth prediction at this cell i
         if target[i].sum() > 0:#select the box with the highest intersection over union
-            repeated_target = target[i].clone().detach().repeat(bboxes.size(0),1)
+            repeated_target = target_global[i].clone().detach().repeat(bboxes.size(0),1)
             jac_idx = _iou(bboxes_global, repeated_target)
-            
             max_iou_idx = torch.argmax(jac_idx)
             R[i,:5] = bboxes[max_iou_idx,:]
         else: #select the box with the highest confidence
@@ -127,8 +129,9 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
     
     - The output is of size NxSxSx(Bx5+C) where B is the no. of bounding boxes encoded 
         in the YOLO format
-    - The target is of size NxSxSx5 in format <x> <y> <w> <h> <class> not encoded in 
-        the YOLO format but normalised wrt the image 
+    - The target is of size NxSxSx5 (generated in the `batch_collate_fn`) in format 
+        <x> <y> <w> <h> <class>
+        not encoded in the YOLO format but normalised wrt the image 
     """
 
     batch_loss = torch.tensor(0).float().to(_DEVICE_)
@@ -144,17 +147,11 @@ def criterion(output, target, lambda_coord = 5, lambda_noobj=0.5): #, stride
             if G[i].sum() > 0: #there is a ground truth prediction at this cell
                 pred_cls = P[i,5:]
                 true_cls = torch.zeros(pred_cls.size()).to(_DEVICE_)
-                true_cls[int(G[i,4])] = 1                
-
-                # TODO: Remove
-                _EPS_ = 1e-7
-                # print(P[i,2:4], G[i,2:4])
-                # print(torch.pow(torch.sqrt(P[i,2:4] + _EPS_) - torch.sqrt(G[i,2:4] + _EPS_),2).sum())
-                # print(F.mse_loss(torch.sqrt(P[i,2:4]), torch.sqrt(G[i,2:4]) + _EPS_, reduction='sum'))
-
+                true_cls[int(G[i,4])] = 1
+                
                 # grid cell regression loss
                 grid_loss = lambda_coord * torch.pow(P[i,0:2] - G[i,0:2], 2).sum() \
-                    + lambda_coord * torch.pow(torch.sqrt(P[i,2:4]) - torch.sqrt(G[i,2:4]),2).sum() \
+                    + lambda_coord * torch.pow(torch.sqrt(P[i,2:4] + _EPS_) - torch.sqrt(G[i,2:4] + _EPS_),2).sum() \
                     + torch.pow(P[i,4] - 1,2) \
                     + torch.pow(pred_cls - true_cls, 2).sum() # class probability loss
             else:

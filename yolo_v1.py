@@ -17,21 +17,16 @@ class YOLOv1(nn.Module):
         self.class_names = class_names
         self.num_classes = len(class_names.keys())        
         self.grid = grid_size
-
-        # resnet50 = models.resnet50(pretrained=True)
-        # for parameter in resnet50.parameters():
-        #     parameter.requires_grad = False
-        # self.feature_extractors = nn.Sequential(*list(resnet50.children())[:-2])
+        self.output_size = (self.grid*self.grid) * ((self.num_bbox*5) + self.num_classes)
 
         self.feature_extractor = self.backbone("_SQUEEZENET_")
 
         self.final_conv = nn.Sequential(
-            #NB: To add more conv layers, the batch size must be increased from 8 to higher
-            nn.Conv2d(512, 1024, 3, bias=False), #2048 is the number of output filters from the last resnet bottleneck
+            nn.Conv2d(512, 1024, 3, bias=False), #512 is the number of output filters from the `feature_extractor`
             nn.BatchNorm2d(1024),
             nn.LeakyReLU(0.1),
 
-            nn.AdaptiveAvgPool2d((7,7)) #nn.AdaptiveAvgPool2d((1,1))
+            nn.AdaptiveAvgPool2d((7,7))
         )
 
         """
@@ -40,24 +35,22 @@ class YOLOv1(nn.Module):
         would be 12x12x256.
         To reduce the dependency on the input image size, we now use a 
         Global Average Pooling operation. Therefore, we can always assume the 
-        input to our 1st linear layer would be `256`, the output channels of `final_conv`
+        input to our 1st linear layer would be `7*7*1024=50176`, the output channels of `final_conv`
         """
         self.linear_layers = nn.Sequential(
-            nn.Linear(50176, 12544, bias=False), #9216
+            nn.Linear(50176, 12544, bias=False),
             nn.BatchNorm1d(12544),
-            nn.Dropout(p=0.5), 
+            nn.Dropout(p=0.1), 
             nn.LeakyReLU(0.1),
 
             nn.Linear(12544, 3136, bias=False),
             nn.BatchNorm1d(3136),
             nn.LeakyReLU(0.1),
 
-            nn.Linear(3136, (self.grid*self.grid) * ((self.num_bbox*5) + self.num_classes), bias=False), #1470
-            nn.BatchNorm1d(1470),
+            nn.Linear(3136, self.output_size, bias=False),
+            nn.BatchNorm1d(self.output_size),
             nn.Sigmoid()
         )
-        #nn.Linear(1024, self.grid*self.grid * ((self.num_bbox*5) + self.num_classes)),
-        
 
     def forward(self, x):
 
@@ -76,23 +69,24 @@ class YOLOv1(nn.Module):
     """
     Weight Initialisation will help present the network from stalling, where
     it doesn't learn anything at all by prevent vanishing/exploding gradients
+
+    Now that batch normalisation has been added, i probably don't care how the 
+    weights are initialised. This is only left and used for legacy reasons
     """
     def init_weights(self):
-        # def init(layer, a=0.1):
-        #     nn.init.kaiming_uniform_(layer.weight, a)
-        #     if layer.bias is not None:
-        #         layer.bias.data.fill_(0.01)
+        def init(layer, a=0.1):
+            nn.init.kaiming_uniform_(layer.weight, a)
+            if layer.bias is not None:
+                layer.bias.data.fill_(0.01)
         
         gain_leaky_relu = nn.init.calculate_gain('leaky_relu', 0.1)
         gain_sig = nn.init.calculate_gain('sigmoid')
 
-        # for layer in self.final_conv:
-        #     if isinstance(layer, nn.Conv2d):
-        #         init(layer, gain_leaky_relu)
+        for layer in self.final_conv:
+            if isinstance(layer, nn.Conv2d):
+                init(layer, gain_leaky_relu)
 
-        # init(self.linear_layers[0], gain_leaky_relu)
-        # init(self.linear_layers[4], gain_sig)
-        # init(self.linear_layers[0], gain_sig)
+
 
     def backbone(self, name):
         def squeezenet_forward(x):

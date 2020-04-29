@@ -70,7 +70,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 8#16
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 30
+_NUM_EPOCHS_ = 35
 
 
 # No need to resize here in transforms as the dataset class does it already
@@ -93,7 +93,7 @@ erase_transform = transforms.RandomErasing(p=0.1, scale=(0.02, 0.12), ratio=(0.1
 
 
 dataset = { 
-    'train': VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_,transform=[normalise_transform], pair_transform=None), #transform=[image_transform, normalise_transform, erase_transform]   pair_transform=pair_transform
+    'train': VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_,transform=[image_transform, normalise_transform, erase_transform], pair_transform=pair_transform), 
     'val': VOCDataset(f"./data/val.txt", transform=[normalise_transform])
 }
 
@@ -113,16 +113,20 @@ if __name__ == "__main__":
     model = YOLOv1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
     model.init_weights()
 
-    model.linear_layers[-1].register_forward_hook(forward_hook) #TODO: Remove
-    model.linear_layers[-1].register_backward_hook(gradient_hook) #TODO: Remove
+    model.linear_layers[-1].register_forward_hook(forward_hook) #TODO: Remove after debugging
+    model.linear_layers[-1].register_backward_hook(gradient_hook) #TODO: Remove after debugging
 
+    """
+    Previously 0.1 was used as the learning rate but this caused the gradients to explode during 
+    training. Now batch normalisation has been added to reduce high activations and the learning 
+    rate as also been reduced to 0.01
+    """
     optimiser = optim.SGD([
-                {'params': model.feature_extractor.parameters(), 'lr': 1e-3}, #1e-3
+                {'params': model.feature_extractor.parameters(), 'lr': 1e-3}, 
                 {'params': model.final_conv.parameters(), 'lr': 1e-2}, 
                 {'params': model.linear_layers.parameters()}
             ], lr=1e-2, momentum=0.9)
     
-    # exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=15, gamma=0.1) #for transfer learning
     exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser)
 
     if torch.cuda.device_count() > 1:
@@ -132,6 +136,7 @@ if __name__ == "__main__":
     train_since = time.time()
     avg_train_loss = []
     avg_val_loss = []
+
     for epoch in range(_NUM_EPOCHS_):
         lr = [group['lr'] for group in optimiser.param_groups]
         print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}\t Learning Rate = {lr}")
