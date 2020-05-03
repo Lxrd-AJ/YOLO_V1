@@ -15,7 +15,7 @@ class VOCDataset(data.Dataset):
             self.image_paths = [x.strip() for x in file.readlines()]            
 
     def __len__(self):        
-        return 32#len(self.image_paths)
+        return len(self.image_paths)
 
     """
     Returns (Image, [det])
@@ -36,7 +36,7 @@ class VOCDataset(data.Dataset):
             detections = [x.split() for x in detections]
             detections = [[float(c) for c in detection] for detection in detections]
 
-        detections = torch.Tensor(detections)#.unsqueeze(0)
+        detections = torch.Tensor(detections)
 
         if self.pair_transform:
             img, detections = self.pair_transform((img, detections))
@@ -44,9 +44,6 @@ class VOCDataset(data.Dataset):
         if self.transform:
             for t in self.transform:
                 img = t(img)
-            # img, detections = self.transform(img, detections)
         
-        
-        # print(img.size(), detections.size())
         return (img, detections)
 

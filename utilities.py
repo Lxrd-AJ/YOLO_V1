@@ -127,17 +127,16 @@ def convert_YOLO_to_center_coords(bbox, grid_x, grid_y, stride, grid_size=7):
 """
 uses the detections in the YOLO format to construct the a tensor in the grid coordinates e.g 7x7x30 to make it easier for loss calculations.
 Used only on the ground truth detection matrices
-#TODO: Rewrite this function
 """
-def gnd_truth_tensor(detections, grid_size=7, num_classes=20):    
-    x = torch.zeros([grid_size, grid_size, num_classes+5], dtype=torch.float32)
-    for i in range(detections.size(0)):
-        grid_x, grid_y = int(detections[i,5]), int(detections[i,6])
-        cls_idx = int(detections[i,0])
-        bbox = detections[i,1:5]
-        x[grid_x,grid_y,1:5] = bbox
-        x[grid_x, grid_y, cls_idx] = 1        
-    return x
+# def gnd_truth_tensor(detections, grid_size=7, num_classes=20):    
+#     x = torch.zeros([grid_size, grid_size, num_classes+5], dtype=torch.float32)
+#     for i in range(detections.size(0)):
+#         grid_x, grid_y = int(detections[i,5]), int(detections[i,6])
+#         cls_idx = int(detections[i,0])
+#         bbox = detections[i,1:5]
+#         x[grid_x,grid_y,1:5] = bbox
+#         x[grid_x, grid_y, cls_idx] = 1        
+#     return x
 
 
 def draw_detections(image, detections, class_names):    

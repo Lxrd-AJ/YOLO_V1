@@ -21,7 +21,7 @@ _GRID_SIZE_ = 7
 _STRIDE_ = _IMAGE_SIZE_[0] / _GRID_SIZE_
 class_names = build_class_names("./voc.names")
 
-dataset = VOCDataset(f"./data/train.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_)
+dataset = VOCDataset(f"./data/val.txt", image_size=_IMAGE_SIZE_, grid_size=_GRID_SIZE_)
 
 class_color_mapping = {
     0: "red", 1: "blue", 2: "AntiqueWhite", 3: "Aquamarine", 4: "Black",

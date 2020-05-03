@@ -1,34 +1,25 @@
 import torch 
 import torch.nn as nn
-import torch.nn.functional as F 
 import torch.utils as utils
 import torchvision.transforms as transforms
 import torch.optim as optim
 import numpy as np
 import time
-import ctypes
-import os
-import random
+import sys
 import math
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
-from PIL import Image
-from pprint import pprint
-from collections import OrderedDict
+import logging
 from data.voc_dataset import VOCDataset
-from utilities import draw_detection, parse_config, build_class_names, iou, convert_center_coords_to_YOLO, gnd_truth_tensor, imshow, im2PIL, draw_detections
+from utilities import build_class_names, im2PIL
 from yolo_v1 import YOLOv1
-# from torchviz import make_dot
-# from graphviz import Source
 from loss import criterion
 from transforms import RandomBlur, RandomHorizontalFlip, RandomVerticalFlip
-from debug_grad import gradient_hook, forward_hook
+# from debug_grad import gradient_hook, forward_hook
 
 
 
 def batch_collate_fn(batch):    
-    images = [item[0].unsqueeze(0) for item in batch]    
-    
+    images = [item[0].unsqueeze(0) for item in batch]
     detections = []
     for item in batch:
         det = item[1]
@@ -64,13 +55,22 @@ def evaluate(model, dataloader):
     return eval_loss
 
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+fileHandler = logging.FileHandler(f'{time.strftime("%Y_%m_%d")}_training.log', mode='w')
+logger.addHandler(fileHandler)
+#Direct the logs to the standard output stream too
+logger.addHandler(logging.StreamHandler(sys.stdout))
+
+logger.info("*****" * 20)
+
 
 _GRID_SIZE_ = 7
 _IMAGE_SIZE_ = (448,448)
-_BATCH_SIZE_ = 8#16
+_BATCH_SIZE_ = 16
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 35
+_NUM_EPOCHS_ = 150
 
 
 # No need to resize here in transforms as the dataset class does it already
@@ -89,7 +89,7 @@ normalise_transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-erase_transform = transforms.RandomErasing(p=0.1, scale=(0.02, 0.12), ratio=(0.1, 1.1))
+erase_transform = transforms.RandomErasing(p=0.1, scale=(0.02, 0.33), ratio=(0.1, 0.1))
 
 
 dataset = { 
@@ -100,21 +100,20 @@ dataset = {
 dataloader = {x: utils.data.DataLoader(dataset[x], batch_size=_BATCH_SIZE_, shuffle=True, num_workers=4, collate_fn=batch_collate_fn)
                 for x in ['train','val']}
 
+logger.info(f'* Training started at {time.strftime("%Y_%m_%d %H:%M")}')
 for x in ['train','val']:
-    print(f"{x} dataset size => {len(dataset[x])}")
+    logger.info(f"* {x} dataset size => {len(dataset[x])}")
+logger.info("*****" * 20)
 
 classes = ["aeroplane", "bicycle", "bird", "boat", "bottle", "bus", "car", "cat", "chair", "cow", "diningtable", "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa", "train", "tvmonitor"]
 
 if __name__ == "__main__":
-    torch.autograd.set_detect_anomaly(True)
+    # torch.autograd.set_detect_anomaly(True)
 
     class_names = build_class_names("./voc.names")
 
     model = YOLOv1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
     model.init_weights()
-
-    model.linear_layers[-1].register_forward_hook(forward_hook) #TODO: Remove after debugging
-    model.linear_layers[-1].register_backward_hook(gradient_hook) #TODO: Remove after debugging
 
     """
     Previously 0.1 was used as the learning rate but this caused the gradients to explode during 
@@ -139,8 +138,8 @@ if __name__ == "__main__":
 
     for epoch in range(_NUM_EPOCHS_):
         lr = [group['lr'] for group in optimiser.param_groups]
-        print(f"Epoch {epoch+1}/{_NUM_EPOCHS_}\t Learning Rate = {lr}")
-        print("-----" * 15)
+        logger.info(f"Epoch {epoch+1}/{_NUM_EPOCHS_}\t Learning Rate = {lr}")
+        logger.info("-----" * 15)
         epoch_loss = 0.0
         epoch_since = time.time()
         model.train()
@@ -159,25 +158,22 @@ if __name__ == "__main__":
                 batch_loss = criterion(predictions, detections)
                 epoch_loss += batch_loss.item()
                 
-                if True: #idx % 100 == 0:
-                    print(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {batch_loss.item()}")
-                
-                    # m_arch = make_dot(batch_loss, params=dict(model.named_parameters()))
-                    # Source(m_arch).render("./model_arch")
+                if True: #idx % 100 == 0: TODO: Uncomment out
+                    logger.info(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {batch_loss.item()}")
 
                 batch_loss.backward()
                 optimiser.step()
 
         epoch_loss = epoch_loss / len(dataloader['train'])
         epoch_elapsed = time.time() - epoch_since
-        print(f"\tAverage Train Epoch loss is {epoch_loss:.2f} [{epoch_elapsed//60:.0f}m {epoch_elapsed%60:.0f}s]")
+        logger.info(f"\tAverage Train Epoch loss is {epoch_loss:.2f} [{epoch_elapsed//60:.0f}m {epoch_elapsed%60:.0f}s]")
         avg_train_loss.append(epoch_loss)
         
 
         #evaluate on the validation dataset
         val_loss = evaluate(model, dataloader['val'])
         avg_val_loss.append(val_loss)
-        print(f"\tAverage Val Loss is {val_loss:.2f}")
+        logger.info(f"\tAverage Val Loss is {val_loss:.2f}")
 
         exp_lr_scheduler.step(val_loss)
 
@@ -196,8 +192,8 @@ if __name__ == "__main__":
         plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
     
     # plt.legend()
-    plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
+    plt.savefig(f"./{time.strftime("%Y_%m_%d %H:%M")}_{len(dataset['train'])}__train_val_loss.png")
 
     #Evaluate on the validation dataset
     train_elapsed = time.time() - train_since
-    print(f"Total training time is [{train_elapsed//60:.0f}m {train_elapsed%60:.0f}s]")
+    logger.info(f"Total training time is [{train_elapsed//60:.0f}m {train_elapsed%60:.0f}s]")
