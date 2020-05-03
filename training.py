@@ -192,7 +192,7 @@ if __name__ == "__main__":
         plt.savefig(f"./{len(dataset['train'])}_elems_train_val_loss.png")
     
     # plt.legend()
-    plt.savefig(f"./{time.strftime("%Y_%m_%d %H:%M")}_{len(dataset['train'])}__train_val_loss.png")
+    plt.savefig(f'./{time.strftime("%Y_%m_%d %H:%M")}_{len(dataset["train"])}__train_val_loss.png')
 
     #Evaluate on the validation dataset
     train_elapsed = time.time() - train_since
