@@ -6,6 +6,49 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+_IMAGE_SIZE_ = (448, 448)
+_GRID_SIZE_ = 7
+_STRIDE_ = _IMAGE_SIZE_[0] / _GRID_SIZE_
+
+
+def predict(model, images, threshold=0.5):
+    with torch.no_grad():
+        predictions = model(images)
+        sz = predictions.size()
+        predictions = predictions.view(sz[0], sz[1] * sz[1], -1) # change from Bx7x7x30 to Bx49x30
+        detection_results = {}
+        for batch_idx in range(sz[0]):
+            prediction = predictions[batch_idx]
+            bboxes = prediction[:,:10]
+
+            # convert predictions from YOLO coordinates to center coordinates
+            rng = np.arange(_GRID_SIZE_) # the range of possible grid coords
+            cols, rows = np.meshgrid(rng, rng)
+            #create a grid with each cell containing the (x,y) location multiplied by stride  
+            rows = torch.FloatTensor(rows).view(-1,1)
+            cols = torch.FloatTensor(cols).view(-1,1)
+            grid = torch.cat((rows,cols),1) * _STRIDE_
+            #convert the boxes to center coordinates (NOT NORMALISED BY THE IMAGE WIDTH)
+            
+            bboxes[:,0:2] = (bboxes[:,0:2] * _STRIDE_).round() + grid #1st box's center x,y
+            bboxes[:,2:4] = (bboxes[:,2:4] * _IMAGE_SIZE_[0]).round() #bboxes[:,2:4].pow(2)   1st box's w & h
+            bboxes[:,5:7] = (bboxes[:,5:7] * _STRIDE_).round() + grid #2nd box's center x,y
+            bboxes[:,7:9] = (bboxes[:,7:9] * _IMAGE_SIZE_[0]).round() #bboxes[:,7:9].pow(2)   2nd box's w & h
+            
+            bboxes = max_box(bboxes[:,:5], bboxes[:,5:])
+            
+            #Get the predicted class at each grid cell
+            class_probs = prediction[:,10:] #this will be of size 49x20 for a grid size of 7x7 and 20 classes
+            pred_class, class_idx = class_probs.max(1) #1 is along the rows i.e for each grid cell
+
+            #Join the predicted classes `class_idx` with the bounding boxes
+            bboxes = torch.cat((bboxes, class_idx.unsqueeze(1).float()), 1)
+
+            #confidence threshold the bounding boxes by their class confidence scores
+            bboxes = confidence_threshold(bboxes, threshold)
+
+            detection_results[batch_idx] = bboxes.unsqueeze(0)
+    return detection_results
 
 
 def imshow(inp, title=None):
@@ -165,7 +208,7 @@ def draw_detection(image, bbox, name, colour="white"):
 
     draw = ImageDraw.Draw(image)
     draw.rectangle((top_left, bottom_right), width=2, outline=colour)
-    draw.text(top_left, name.upper(), fill=(250,180,148,255)) #, font=ImageFont.truetype("Helvetica",15)
+    draw.text(top_left, name.upper(), fill=(250,180,148,255), font=ImageFont.truetype("Helvetica",11)) #, font=ImageFont.truetype("Helvetica",15)
 
 
 def parse_config(cfg_file):
@@ -216,7 +259,7 @@ def confidence_threshold(A, conf_thresh):
     #4 is the index of the confidence value
     conf_mask = (A[:,4] > conf_thresh).float().unsqueeze(1)    
     conf_mask = conf_mask * A
-    conf_mask = torch.nonzero(conf_mask[:,0]).squeeze()
+    conf_mask = torch.nonzero(conf_mask[:,0], as_tuple=False).squeeze()
     return A[conf_mask,:]    
 
 

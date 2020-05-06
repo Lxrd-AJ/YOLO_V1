@@ -30,6 +30,8 @@ class_color_mapping = {
     15: "DimGrey", 16: "SlateBlue", 17: "Fuchsia", 18: "Gold", 19: "IndianRed"
 }
 
+# TODO: Split this into detect_video and detect_image
+
 if __name__ == "__main__":
     model = YOLOv1(class_names, 7)
     model.load_state_dict( \

@@ -1,6 +1,7 @@
 optimiser_yolo.pth
 yolo_v1_model.pth
 25_epochs_yolo_v1.pth
+yolo_epoch_20_model.pth
 
 extraction.conv.weights
 yolov1.weights
@@ -18,6 +19,10 @@ data/2012_val.txt
 data/train.txt
 data/test.txt
 data/val.txt
+data/IMG_4955.mov
+data/car_bike.png
+
+training_plots/
 
 model_arch
 model_arch.pdf

@@ -70,7 +70,7 @@ _IMAGE_SIZE_ = (448,448)
 _BATCH_SIZE_ = 16
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-_NUM_EPOCHS_ = 150
+_NUM_EPOCHS_ = 90#150
 
 
 # No need to resize here in transforms as the dataset class does it already
@@ -126,7 +126,8 @@ if __name__ == "__main__":
                 {'params': model.linear_layers.parameters()}
             ], lr=1e-2, momentum=0.9)
     
-    exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser)
+    exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=30, gamma=0.1)
+    # exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser)
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -158,7 +159,7 @@ if __name__ == "__main__":
                 batch_loss = criterion(predictions, detections)
                 epoch_loss += batch_loss.item()
                 
-                if True: #idx % 100 == 0: TODO: Uncomment out
+                if idx % 100 == 0:
                     logger.info(f"\tIteration {idx+1}/{len(dataloader['train'])}: Loss = {batch_loss.item()}")
 
                 batch_loss.backward()
@@ -175,16 +176,15 @@ if __name__ == "__main__":
         avg_val_loss.append(val_loss)
         logger.info(f"\tAverage Val Loss is {val_loss:.2f}")
 
-        exp_lr_scheduler.step(val_loss)
+        exp_lr_scheduler.step() #val_loss
 
         # Save the model parameters https://pytorch.org/tutorials/beginner/saving_loading_models.html
         if epoch % 10 == 0:
-            torch.save(model.state_dict(), "./yolo_v1_model.pth")
-            # torch.save(optimiser.state_dict(), "./optimiser_yolo.pth")
+            torch.save(model.state_dict(), f"./yolo_v1_model_{epoch}_epoch.pth")
 
         #Make some plots baby! 
-        plt.plot(avg_train_loss,'r',label='Train',marker='o')
-        plt.plot(avg_val_loss,'b',label='Val',marker='x')
+        plt.plot(avg_train_loss,'r',label='Train')
+        plt.plot(avg_val_loss,'b',label='Val')
         plt.xticks(np.arange(0,_NUM_EPOCHS_,10))
         
         plt.title(f"Train & Val loss using {len(dataset['train'])} images")
