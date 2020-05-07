@@ -19,10 +19,16 @@ class YOLOv1(nn.Module):
         self.grid = grid_size
         self.output_size = (self.grid*self.grid) * ((self.num_bbox*5) + self.num_classes)
 
-        self.feature_extractor = self.backbone("_SQUEEZENET_")
+        self.feature_extractor = self.backbone("_RESNET_50_")
+        fc_in = 2048 # 2048 for resnet50 and 512 for squeezenet
 
         self.final_conv = nn.Sequential(
-            nn.Conv2d(512, 1024, 3, bias=False), #512 is the number of output filters from the `feature_extractor`
+            nn.Conv2d(fc_in, 1024, 3, bias=False),
+            nn.BatchNorm2d(1024),
+            nn.Dropout2d(p=0.5),
+            nn.LeakyReLU(0.1),
+
+            nn.Conv2d(1024, 1024, 1, bias=False),
             nn.BatchNorm2d(1024),
             nn.LeakyReLU(0.1),
 

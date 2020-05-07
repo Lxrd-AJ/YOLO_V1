@@ -46,8 +46,10 @@ def predict(model, images, threshold=0.5):
 
             #confidence threshold the bounding boxes by their class confidence scores
             bboxes = confidence_threshold(bboxes, threshold)
-
-            detection_results[batch_idx] = bboxes.unsqueeze(0)
+            if bboxes.nelement() == 0:
+                detection_results[batch_idx] = []
+            else:
+                detection_results[batch_idx] = bboxes#.unsqueeze(0)
     return detection_results
 
 
@@ -259,7 +261,7 @@ def confidence_threshold(A, conf_thresh):
     #4 is the index of the confidence value
     conf_mask = (A[:,4] > conf_thresh).float().unsqueeze(1)    
     conf_mask = conf_mask * A
-    conf_mask = torch.nonzero(conf_mask[:,0], as_tuple=False).squeeze()
+    conf_mask = torch.nonzero(conf_mask[:,0], as_tuple=False)#.squeeze()
     return A[conf_mask,:]    
 
 

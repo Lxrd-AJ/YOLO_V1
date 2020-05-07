@@ -45,7 +45,7 @@ def evaluate(model, dataloader):
     eval_loss = 0.0
     with torch.no_grad():
         for idx, data in enumerate(dataloader, 0):
-            X, Y = data #transform(data[0]), data[1]
+            X, Y = data
             X = X.to(_DEVICE_)
             Y = Y.to(_DEVICE_)
             res = model(X)
@@ -67,7 +67,7 @@ logger.info("*****" * 20)
 
 _GRID_SIZE_ = 7
 _IMAGE_SIZE_ = (448,448)
-_BATCH_SIZE_ = 16
+_BATCH_SIZE_ = 8
 _STRIDE_ = _IMAGE_SIZE_[0] / 7
 _DEVICE_ = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _NUM_EPOCHS_ = 90#150
@@ -76,12 +76,12 @@ _NUM_EPOCHS_ = 90#150
 # No need to resize here in transforms as the dataset class does it already
 image_transform = transforms.Compose([
     transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),        
-    RandomBlur(probability=0.2)
+    RandomBlur(probability=0.3)
 ])
 #Image detection pair transforms
 pair_transform = transforms.Compose([
     RandomHorizontalFlip(probability=0.5),
-    RandomVerticalFlip(probability=0.3)
+    RandomVerticalFlip(probability=0.4)
 ])
 
 normalise_transform = transforms.Compose([
@@ -89,7 +89,7 @@ normalise_transform = transforms.Compose([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 ])
 
-erase_transform = transforms.RandomErasing(p=0.1, scale=(0.02, 0.33), ratio=(0.1, 0.1))
+erase_transform = transforms.RandomErasing(p=0.2, scale=(0.02, 0.33), ratio=(0.1, 0.1))
 
 
 dataset = { 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     class_names = build_class_names("./voc.names")
 
     model = YOLOv1(class_names, _GRID_SIZE_, _IMAGE_SIZE_)
-    model.init_weights()
+    # model.init_weights()
 
     """
     Previously 0.1 was used as the learning rate but this caused the gradients to explode during 
@@ -124,7 +124,7 @@ if __name__ == "__main__":
                 {'params': model.feature_extractor.parameters(), 'lr': 1e-3}, 
                 {'params': model.final_conv.parameters(), 'lr': 1e-2}, 
                 {'params': model.linear_layers.parameters()}
-            ], lr=1e-2, momentum=0.9)
+            ], lr=1e-1, momentum=0.9)
     
     exp_lr_scheduler = optim.lr_scheduler.StepLR(optimiser, step_size=30, gamma=0.1)
     # exp_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimiser)

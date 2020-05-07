@@ -2,6 +2,7 @@ optimiser_yolo.pth
 yolo_v1_model.pth
 25_epochs_yolo_v1.pth
 yolo_epoch_20_model.pth
+model_checkpoints/*.pth
 
 extraction.conv.weights
 yolov1.weights
@@ -20,7 +21,8 @@ data/train.txt
 data/test.txt
 data/val.txt
 data/IMG_4955.mov
-data/car_bike.png
+data/*.png
+*.mp4
 
 training_plots/
 
@@ -29,7 +31,7 @@ model_arch.pdf
 yolo_1.pdf
 Yolo Object Detectors_Final Layers and Loss Functions.pdf
 
-*_elems_train_val_loss.png
+*_elems_train_val_loss*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

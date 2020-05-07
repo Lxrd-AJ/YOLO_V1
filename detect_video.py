@@ -3,6 +3,7 @@ import torch
 import torchvision.transforms as transforms
 import time
 import cv2
+import numpy as np
 from PIL import Image
 from yolo_v1 import YOLOv1
 from utilities import build_class_names, predict, draw_detection
@@ -14,7 +15,7 @@ parser.add_argument('--output', dest='output_path', help='The file name of the p
 
 _IMAGE_SIZE_ = (448,448)
 _GRID_SIZE_ = 7
-_MODEL_PATH_ = "./model_checkpoints/25_epochs_yolo_v1.pth"
+_MODEL_PATH_ = "./model_checkpoints/yolo_epoch_20_model.pth"
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -35,21 +36,38 @@ if __name__ == "__main__":
     print(f"Using pretrained weights: {model_path}")
 
     if args.video_path:
-        print(f"-> Processing objects in '{args.video_path}'")
         capture = cv2.VideoCapture(args.video_path)
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_counter = 0
+        print(f"-> Processing {total_frames} frames in '{args.video_path}'")
 
-        output_path = args.output_path if args.output_path is not None else f"processed_{args.video_path}"
-        fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+        output_path = args.output_path if args.output_path is not None else f"./processed_video.mp4"
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         output_capture = cv2.VideoWriter(output_path, fourcc, 30, (448,448))
 
         while capture.isOpened():
-            ret, frame = capture.read()
+            ret, frame = capture.read() #NB: `frame` is a numpy array
+            frame_counter += 1
             
             if ret:
-                print(type(frame))
-                print(frame.shape)
+                percent = (frame_counter/total_frames) * 100
+                print(f"- [{percent:.0f}%] Processing frame {frame_counter}")
+                image_PIL = Image.fromarray(frame).resize(_IMAGE_SIZE_, Image.ANTIALIAS)
+                image = transform(image_PIL).unsqueeze(0)
 
-                cv2.imshow('frame', frame)
+                predictions = predict(model, image, 0.6)[0]
+                for bbox in predictions:
+                    #TODO: Fix bug: multi detections are not showing
+                    try:
+                        pred_class = class_names[int(bbox[5])]
+                        print(f"\t-> Predicted {pred_class} with bounding box: {bbox}")
+                        draw_detection(image_PIL, bbox[:4]/_IMAGE_SIZE_[0], pred_class)
+                    except:
+                        print(bbox)
+
+                frame = np.array(image_PIL)
+                cv2.imshow(args.video_path, frame)
+                output_capture.write(frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
             else:
