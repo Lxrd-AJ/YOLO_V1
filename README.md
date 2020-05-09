@@ -25,6 +25,7 @@ The model achieves a relatively low training loss on the dataset. The validation
 ![](plots/24_elems_train_val_loss.png)
 
 ## Image Augmentation
+<!-- TODO: Show the ground truth detections on the augmentations -->
 Sample augmentations applied are shown below
 ![](./data/car_bike.png)
 ### Color Jitter
@@ -38,3 +39,15 @@ Sample augmentations applied are shown below
 ### Random Erasing
 
 # Inference 
+## Inference speed 
+
+| Device | Backbone | Input Size | Time (seconds) |
+| --- | --- | --- | --- |
+| 2.9 GHz Dual-Core Intel Core i5 | ResNet50 | 448x448 | 2s |
+| NVIDIA Tesla K80 GPU | ResNet50 | 448x448 | - |
+
+## Prediction
+* Image File on disk: `python detect_image --image="./data/car_bike.png" --model="./model_checkpoints/90_epoch.pth"`
+* Video file on disk: `python detect_image --video="./data/IMG_4855.mov" --model="./model_checkpoints/90_epoch.pth" --output="./processed_IMG_4855.mov"`
+
+<!-- TODO: ## Pretrained weights -->

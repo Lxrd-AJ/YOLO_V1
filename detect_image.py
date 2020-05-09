@@ -36,20 +36,20 @@ if __name__ == "__main__":
     ])
 
     rhf = RandomVerticalFlip(probability=1.0)
-    
-    start_time = time.time()
 
     if args.image_path:
         print(f"-> Detecting objects in '{args.image_path}'")
         with torch.no_grad():
             image = Image.open(args.image_path).convert('RGB').resize(_IMAGE_SIZE_, Image.ANTIALIAS)
             image_ = transform(image).unsqueeze(0)
-            image.show()
+            # image.show()
             flipped_image, _ = rhf((image,[]))
-            flipped_image.show()
+            # flipped_image.show()
 
             batch_idx = 0
+            start_time = time.time()
             predictions = predict(model, image_) #[B,N,1,6] or [B,1,1,6]
+            elapsed = time.time() - start_time
             predictions = predictions[batch_idx] #[N,1,6]
 
             # for bbox in predictions:
@@ -59,7 +59,7 @@ if __name__ == "__main__":
                 pred_class = int(bbox[5])
                 draw_detection(image, bbox[:4]/_IMAGE_SIZE_[0], class_names[pred_class])
             image.show()
-        elapsed = time.time() - start_time
+        
         print(f"Total time taken {elapsed//60:.0f}m {elapsed%60:.0f}s")
 
 
