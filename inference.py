@@ -6,14 +6,21 @@ import numpy as np
 import random
 # import cv2 as cv
 from torch.autograd import Variable
-from utilities import build_class_names, draw_detection, confidence_threshold, max_box, nms
+from utilities import build_class_names, draw_detection, confidence_threshold, max_box, nms, im2PIL, imshow
+from transforms import RandomBlur, RandomHorizontalFlip, RandomVerticalFlip
 from PIL import Image, ImageOps
 from yolo_v1 import YOLOv1
 from data.voc_dataset import VOCDataset
 
-transform = transforms.Compose([    
+transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    transforms.RandomErasing(p=1, scale=(0.02, 0.33), ratio=(0.1, 0.1))
+])
+
+pair_transform = transforms.Compose([
+    RandomHorizontalFlip(probability=0),
+    RandomVerticalFlip(probability=1)
 ])
 
 _IMAGE_SIZE_ = (448, 448)
@@ -30,13 +37,12 @@ class_color_mapping = {
     15: "DimGrey", 16: "SlateBlue", 17: "Fuchsia", 18: "Gold", 19: "IndianRed"
 }
 
-# TODO: Split this into detect_video and detect_image
 
 if __name__ == "__main__":
     model = YOLOv1(class_names, 7)
     model.load_state_dict( \
         # torch.load('./model_checkpoints/yolo_v1_model.pth', map_location=torch.device('cpu')) \
-        torch.load('./yolo_v1_model.pth', map_location=torch.device('cpu')) \
+        torch.load("./model_checkpoints/yolo_v1_model_80_epoch.pth", map_location=torch.device('cpu')) \
     )
     model.eval()
     
@@ -58,6 +64,12 @@ if __name__ == "__main__":
 
         # Rearrange predicted detections
         X_ = transform(X).unsqueeze(0)
+        
+        # impil = im2PIL(X_[0])
+        # for det in dets:
+        #     draw_detection(impil, det[1:], class_names[int(det[0])])        
+        # impil.show()
+        
         predictions = model(X_)
         sz = predictions.size()    
         
@@ -94,7 +106,7 @@ if __name__ == "__main__":
 
             #confidence threshold the bounding boxes by their class confidence scores            
             
-            bboxes = confidence_threshold(bboxes, 0.5)
+            bboxes = confidence_threshold(bboxes, 0.6)
             # print(f"Len {bboxes.size(0)} b4 NMS")
             # bboxes = bboxes.unsqueeze(0)
             #TODO: Fix nms
@@ -102,6 +114,7 @@ if __name__ == "__main__":
             # print(f"Len {len(bboxes)} after NMS")
 
             #TEST: Show the predictions
+            print(bboxes)
             print(bboxes.size())
             if len(bboxes.shape) == 1:
                 bbox = bboxes
@@ -109,7 +122,8 @@ if __name__ == "__main__":
                 c = int(bbox[5])        
                 draw_detection(X__,bbox[:4] / _IMAGE_SIZE_[0], class_names[c], class_color_mapping[c])
             else:
-                for bbox in bboxes:  
+                for idx in range(0, bboxes.size(0)):  
+                    bbox = bboxes[idx,:][0]
                     print(bbox)     
                     c = int(bbox[5])        
                     draw_detection(X__,bbox[:4] / _IMAGE_SIZE_[0], class_names[c], class_color_mapping[c])

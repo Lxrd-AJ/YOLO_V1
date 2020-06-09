@@ -62,6 +62,8 @@ class YOLOv1(nn.Module):
 
         activations = self.feature_extractor(x)
         activations = self.final_conv(activations)
+        print(activations.size())
+        exit(0)
 
         flattened = torch.flatten(activations)
         flattened = flattened.view(x.size()[0],-1) #resize it so that it is flattened by batch

@@ -15,7 +15,7 @@ parser.add_argument('--output', dest='output_path', help='The file name of the p
 
 _IMAGE_SIZE_ = (448,448)
 _GRID_SIZE_ = 7
-_MODEL_PATH_ = "./model_checkpoints/yolo_epoch_20_model.pth"
+_MODEL_PATH_ = "./model_checkpoints/yolo_v1_model_80_epoch.pth"
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -52,19 +52,23 @@ if __name__ == "__main__":
             if ret:
                 percent = (frame_counter/total_frames) * 100
                 print(f"- [{percent:.0f}%] Processing frame {frame_counter}")
-                image_PIL = Image.fromarray(frame).resize(_IMAGE_SIZE_, Image.ANTIALIAS)
+                image_PIL = Image.fromarray(frame)
+                old_size = image_PIL.size
+                image_PIL = image_PIL.resize(_IMAGE_SIZE_, Image.ANTIALIAS)
                 image = transform(image_PIL).unsqueeze(0)
 
                 predictions = predict(model, image, 0.6)[0]
-                for bbox in predictions:
-                    #TODO: Fix bug: multi detections are not showing
-                    try:
-                        pred_class = class_names[int(bbox[5])]
-                        print(f"\t-> Predicted {pred_class} with bounding box: {bbox}")
-                        draw_detection(image_PIL, bbox[:4]/_IMAGE_SIZE_[0], pred_class)
-                    except:
-                        print(bbox)
+                if len(predictions) > 0:
+                    for idx in range(0, predictions.size(0)):
+                        bbox = predictions[idx,:][0]
+                        try:
+                            pred_class = class_names[int(bbox[5])]
+                            print(f"\t-> Predicted {pred_class} with bounding box: {bbox}")
+                            draw_detection(image_PIL, bbox[:4]/_IMAGE_SIZE_[0], pred_class)
+                        except:
+                            print(bbox)
 
+                image_PIL = image_PIL.resize(old_size, Image.ANTIALIAS)
                 frame = np.array(image_PIL)
                 cv2.imshow(args.video_path, frame)
                 output_capture.write(frame)

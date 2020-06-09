@@ -13,7 +13,7 @@ parser.add_argument('--model', dest='model_path', help='Pretrained YOLOv1 model 
 
 _IMAGE_SIZE_ = (448,448)
 _GRID_SIZE_ = 7
-_MODEL_PATH_ = "./model_checkpoints/0_epoch.pth"
+_MODEL_PATH_ = "./model_checkpoints/yolo_v1_model_80_epoch.pth"
 
 if __name__ == "__main__":
     """
@@ -40,7 +40,9 @@ if __name__ == "__main__":
     if args.image_path:
         print(f"-> Detecting objects in '{args.image_path}'")
         with torch.no_grad():
-            image = Image.open(args.image_path).convert('RGB').resize(_IMAGE_SIZE_, Image.ANTIALIAS)
+            image = Image.open(args.image_path).convert('RGB')
+            old_size = image.size
+            image = image.resize(_IMAGE_SIZE_, Image.ANTIALIAS)
             image_ = transform(image).unsqueeze(0)
             # image.show()
             flipped_image, _ = rhf((image,[]))
@@ -48,7 +50,7 @@ if __name__ == "__main__":
 
             batch_idx = 0
             start_time = time.time()
-            predictions = predict(model, image_) #[B,N,1,6] or [B,1,1,6]
+            predictions = predict(model, image_, 0.6) #[B,N,1,6] or [B,1,1,6]
             elapsed = time.time() - start_time
             predictions = predictions[batch_idx] #[N,1,6]
 
@@ -58,6 +60,7 @@ if __name__ == "__main__":
                 print(bbox)
                 pred_class = int(bbox[5])
                 draw_detection(image, bbox[:4]/_IMAGE_SIZE_[0], class_names[pred_class])
+            image.resize(old_size, Image.ANTIALIAS)
             image.show()
         
         print(f"Total time taken {elapsed//60:.0f}m {elapsed%60:.0f}s")
