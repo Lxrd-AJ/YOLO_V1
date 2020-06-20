@@ -36,7 +36,6 @@ Sample augmentations applied are shown below
 ![](./data/random_horizontal_flip.png)
 ### Random Vertical Flip
 ![](./data/random_vertical_flip.png)
-### Random Erasing
 
 # Inference 
 ## Inference speed 
@@ -50,4 +49,3 @@ Sample augmentations applied are shown below
 * Image File on disk: `python detect_image --image="./data/car_bike.png" --model="./model_checkpoints/90_epoch.pth"`
 * Video file on disk: `python detect_image --video="./data/IMG_4855.mov" --model="./model_checkpoints/90_epoch.pth" --output="./processed_IMG_4855.mov"`
 
-<!-- TODO: ## Pretrained weights -->
