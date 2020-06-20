@@ -22,7 +22,7 @@ There are some helper scripts available:
 
 The model achieves a relatively low training loss on the dataset. The validation loss is lower than the training loss due to the data augmentation applied to the train dataset during training.
 
-![](plots/13170_elems_train_val_loss.png)
+![](./13170_elems_train_val_loss.png)
 
 ## Image Augmentation
 <!-- TODO: Show the ground truth detections on the augmentations -->

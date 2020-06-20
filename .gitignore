@@ -21,7 +21,7 @@ data/train.txt
 data/test.txt
 data/val.txt
 data/IMG_4955.mov
-data/*.png
+# data/*.png
 *.mp4
 
 training_plots/
