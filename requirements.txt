@@ -17,7 +17,7 @@ gradient==0.5.2
 graphviz==0.13.2
 halo==0.0.28
 idna==2.8
-Jinja2==2.11.1
+Jinja2==2.11.3
 kiwisolver==1.1.0
 log-symbols==0.0.14
 MarkupSafe==1.1.1
