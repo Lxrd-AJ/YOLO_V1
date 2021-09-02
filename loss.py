@@ -82,7 +82,7 @@ def box(output, target, size=448, B=2):
     sz = output.size()
     output = output.view(sz[0] * sz[1], -1) #e.g 49x30
     pred_bboxes = output[:,:B*5] #slice out only the bounding boxes e.g 49x10
-    pred_classes = output[:,B*5:] #slice out the pred classes  e.g 49x10
+    pred_classes = output[:,B*5:] #slice out the pred classes  e.g 49x20
     target = target.view(sz[0] * sz[1], -1) #e.g 49x5
 
     # The `*_global` variables are needed for IoU calculations 
