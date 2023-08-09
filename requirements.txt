@@ -35,7 +35,7 @@ pyparsing==2.4.6
 python-dateutil==2.8.1
 python-utils==2.3.0
 pytz==2019.3
-PyYAML==5.3
+PyYAML==5.4
 raven==6.10.0
 requests==2.22.0
 requests-toolbelt==0.9.1
